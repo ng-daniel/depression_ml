@@ -1,0 +1,15 @@
+number,days,gender,age,afftype,melanch,inpatient,edu,marriage,work,madrs1,madrs2
+condition_15,13,2,55-59,2,2,2,11-15,1,1,14,18
+condition_16,16,1,45-49,2,2,2,11-15,1,2,13,17
+condition_17,13,1,50-54,1,2,2,6-10,1,2,17,15
+condition_18,13,2,40-44,3,2,2,11-15,2,2,18,15
+condition_19,13,2,50-54,2,2,1,16-20,2,2,26,21
+condition_20,13,1,30-34,2,1,1,6-10,1,2,27,25
+control_25,13,1,65-69,NA,NA,NA, ,NA,NA,NA,NA
+control_26,13,1,35-39,NA,NA,NA, ,NA,NA,NA,NA
+control_27,13,2,50-54,NA,NA,NA, ,NA,NA,NA,NA
+control_28,16,2,45-49,NA,NA,NA, ,NA,NA,NA,NA
+control_29,13,2,50-54,NA,NA,NA, ,NA,NA,NA,NA
+control_30,9,2,35-39,NA,NA,NA, ,NA,NA,NA,NA
+control_31,13,1,20-24,NA,NA,NA, ,NA,NA,NA,NA
+control_32,14,2,25-29,NA,NA,NA, ,NA,NA,NA,NA
