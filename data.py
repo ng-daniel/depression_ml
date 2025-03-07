@@ -1,0 +1,66 @@
+from util import log_skip_zeroes
+import pandas as pd
+import os
+import torch
+from torch.utils.data import Dataset, DataLoader
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.model_selection import train_test_split
+
+CONDITION_SIZE = 23
+CONTROL_SIZE = 32
+DIR_PATH = "data/all"
+scores = pd.read_csv("data/scores.csv", index_col='number')
+
+def concat_data(dir_name: str, 
+              dir_size: int, 
+              class_type: str,  
+              class_label: int,
+              start_time: str,
+              output_df: pd.DataFrame, 
+              scores_df: pd.DataFrame):
+    for i in range(1, dir_size + 1):
+        
+        # read CSV into truncated dataframe
+        
+        filename = f"{class_type}_{i}"
+        datapath = os.path.join(dir_name, filename + ".csv")
+        file_df = pd.read_csv(datapath)
+
+        # find occurences of 
+
+        sr = file_df['timestamp'].map(lambda x: x.split()[1])
+        indexes_of_time = list(sr[sr==start_time].index)
+
+        # split file_df into intervals of days
+
+        num_days = scores_df.loc[filename, "days"]
+        for j in range(num_days):
+            interval = [indexes_of_time[j], indexes_of_time[j+1]]
+            day_df = file_df.iloc[interval[0]:interval[1]]
+            day_df = day_df['activity'].rename(f"{class_label}_{i}_{j}").reset_index(drop=True)
+            
+            # concatenate data column to output dataframe
+            if(len(day_df) == 1440):
+                output_df = pd.concat([output_df, day_df], axis=1)
+
+    return output_df
+
+class ActigraphDataset(Dataset):
+    def __init__(self, X, y):
+        self.X = torch.from_numpy(X).float().unsqueeze(dim=1)
+        self.y = torch.tensor(y).float()
+    def __len__(self):
+        return len(self.y)
+    def __getitem__(self, index):
+        X = self.X[index]
+        y = self.y[index]
+        
+        # code for reshaping 1d tensor to 2d with padding
+        '''
+        new_shape = math.ceil(X.shape[0] / INPUT_SIZE)
+        padding = new_shape * INPUT_SIZE - X.shape[0]
+        p = nn.ZeroPad1d((0,padding))
+        X = p(X)
+        X = X.reshape((new_shape, INPUT_SIZE))
+        '''
+        return X, y
