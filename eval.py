@@ -1,11 +1,9 @@
+import numpy as np
 import torch
 from torch.utils.data import DataLoader
 from sklearn.metrics import precision_recall_fscore_support
 
-def eval_model(model: torch.nn,
-              dataloader: DataLoader,
-              criterion: torch.nn,
-              device):
+def eval_model(model: torch.nn, dataloader: DataLoader, criterion: torch.nn, device, note=None):
     
     num_items = 0
     test_loss = 0
@@ -13,6 +11,10 @@ def eval_model(model: torch.nn,
     test_precision = 0
     test_recall = 0
     test_fscore = 0
+
+    model_name = type(model).__name__
+    if note:
+        model_name += ": "+note
 
     model.eval()
     with torch.inference_mode():
@@ -32,7 +34,7 @@ def eval_model(model: torch.nn,
             precision, recall, fscore, _ = precision_recall_fscore_support(y_true = y.cpu(),
                                                                         y_pred = preds.cpu(),
                                                                         average = 'binary',
-                                                                        beta = 1.0)
+                                                                        zero_division=np.nan)
             test_precision += precision
             test_recall += recall
             test_fscore += fscore
@@ -45,7 +47,7 @@ def eval_model(model: torch.nn,
     test_recall /= len(dataloader)
     test_fscore /= len(dataloader)
 
-    return {'model_name': type(model).__name__,
+    return {'model_name': model_name,
             'num_samples': f"{num_items}",
             'loss': f"{test_loss:.4f}",
             'accuracy': f"{(100*test_acc):.2f}%",
