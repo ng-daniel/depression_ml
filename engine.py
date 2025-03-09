@@ -19,14 +19,15 @@ def train_step(model: torch.nn,
 
         # calculate loss
         loss = criterion(out.squeeze(dim=1), y)
-        train_loss += loss.item()
 
-        # aggregate accuracy
-        train_acc += (preds==y).sum() / len(y)
+        # aggregate loss, accuracy
+        train_loss += loss.item()
+        train_acc += ((preds==y).sum() / len(y)).item()
 
         # backpropagation and updating weights
         loss.backward()
         optimizer.step()
+
     train_loss /= len(dataloader)
     train_acc /= len(dataloader)
 
@@ -49,11 +50,10 @@ def test_step(model: torch.nn,
 
             # calculate loss
             loss = criterion(out.squeeze(dim=1), y)
+
+            # aggregate loss, accuracy
             test_loss += loss.item()
-
-            # aggregate accuracy
             test_acc += ((preds==y).sum() / len(y)).item()
-
 
     test_loss /= len(dataloader)
     test_acc /= len(dataloader)

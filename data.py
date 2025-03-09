@@ -12,12 +12,13 @@ DIR_PATH = "data/all"
 scores = pd.read_csv("data/scores.csv", index_col='number')
 
 def concat_data(dir_name: str, 
-              dir_size: int, 
               class_type: str,  
               class_label: int,
               start_time: str,
               output_df: pd.DataFrame, 
               scores_df: pd.DataFrame):
+    
+    dir_size = len(os.listdir(dir_name))
     for i in range(1, dir_size + 1):
         
         # read CSV into truncated dataframe
@@ -44,6 +45,29 @@ def concat_data(dir_name: str,
                 output_df = pd.concat([output_df, day_df], axis=1)
 
     return output_df
+
+def load_preprocess_dataframe_labels(dir_names: list, 
+                                     class_names: list, 
+                                     time: str):
+    # load scores dataframe (information about each datafile)
+    scores = pd.read_csv("data/scores.csv", index_col='number')
+    
+    # fill dataframe
+    data = pd.DataFrame()
+    for CLASS in range(len(dir_names)):
+        data = concat_data(dir_names[CLASS], class_names[CLASS], 
+                                    CLASS, time, data, scores)
+    
+    # transpose data so columns are time and rows are subjects
+    data = data.transpose()
+    
+    # apply log function to all values
+    data = data.map(lambda x: log_skip_zeroes(x))
+    
+    # set labels
+    labels = data.index.map(lambda x: int(x[0]))
+    
+    return data, labels
 
 class ActigraphDataset(Dataset):
     def __init__(self, X, y):
