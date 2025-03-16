@@ -1,15 +1,39 @@
 import os
+
+import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
-import torch
+from scipy.fft import rfft
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import train_test_split, KFold
+import torch
 from torch.utils.data import Dataset, DataLoader
+
 from util import log_skip_zeroes
 
 CONDITION_SIZE = 23
 CONTROL_SIZE = 32
 DIR_PATH = "data/all"
 scores = pd.read_csv("data/scores.csv", index_col='number')
+
+class ActigraphDataset(Dataset):
+    def __init__(self, X, y):
+        self.X = torch.from_numpy(X).float().unsqueeze(dim=1)
+        self.y = torch.tensor(y).float()
+    def __len__(self):
+        return len(self.y)
+    def __getitem__(self, index):
+        X = self.X[index]
+        y = self.y[index]
+        # code for reshaping 1d tensor to 2d with padding
+        '''
+        new_shape = math.ceil(X.shape[0] / INPUT_SIZE)
+        padding = new_shape * INPUT_SIZE - X.shape[0]
+        p = nn.ZeroPad1d((0,padding))
+        X = p(X)
+        X = X.reshape((new_shape, INPUT_SIZE))
+        '''
+        return X, y
 
 def concat_data(dir_name: str, class_type: str, class_label: int, start_time: str, output_df: pd.DataFrame, scores_df: pd.DataFrame):
 
@@ -41,7 +65,7 @@ def concat_data(dir_name: str, class_type: str, class_label: int, start_time: st
 
     return output_df
 
-def load_preprocess_dataframe_labels(dir_names: list, class_names: list, time: str):
+def load_dataframe_labels(dir_names: list, class_names: list, time: str):
     # load scores dataframe (information about each datafile)
     scores = pd.read_csv("data/scores.csv", index_col='number')
     # fill dataframe
@@ -51,42 +75,38 @@ def load_preprocess_dataframe_labels(dir_names: list, class_names: list, time: s
                                     CLASS, time, data, scores)
     # transpose data so columns are time and rows are subjects
     data = data.transpose()
-    # apply log function to all values
-    data = data.map(lambda x: log_skip_zeroes(x))
     # set labels
     labels = data.index.map(lambda x: int(x[0]))
     return data, labels
 
-class ActigraphDataset(Dataset):
-    def __init__(self, X, y):
-        self.X = torch.from_numpy(X).float().unsqueeze(dim=1)
-        self.y = torch.tensor(y).float()
-    def __len__(self):
-        return len(self.y)
-    def __getitem__(self, index):
-        X = self.X[index]
-        y = self.y[index]
-        # code for reshaping 1d tensor to 2d with padding
-        '''
-        new_shape = math.ceil(X.shape[0] / INPUT_SIZE)
-        padding = new_shape * INPUT_SIZE - X.shape[0]
-        p = nn.ZeroPad1d((0,padding))
-        X = p(X)
-        X = X.reshape((new_shape, INPUT_SIZE))
-        '''
-        return X, y
-
-def train_test_dataloaders(data: pd.DataFrame, labels: list, test_size: float, shuffle: bool, random_state: int, batch_size: int):
-    # train test split
+def kfolds_dataframes(data: pd.DataFrame, labels: list, numfolds: int, shuffle: bool, random_state: int, batch_size: int):
+    # apply log function to all values
+    data = data.map(lambda x: log_skip_zeroes(x))
+    
     if shuffle:
-        X_train, X_test, y_train, y_test = train_test_split(data, labels, 
-                                                            test_size=test_size, 
-                                                            shuffle=shuffle, 
-                                                            random_state=random_state)
+        kf = KFold(n_splits=numfolds, shuffle=shuffle, random_state=42)
     else:
-        X_train, X_test, y_train, y_test = train_test_split(data, labels, 
-                                                            test_size=test_size, 
-                                                            shuffle=shuffle)
+        kf = KFold(n_splits=numfolds, shuffle=shuffle)
+    kf.get_n_splits(data)
+
+    folds = []
+    for i, (train_index, test_index) in enumerate(kf.split(data)):
+        
+        X_train = data.iloc[train_index]
+        X_test = data.iloc[test_index]
+        y_train = [labels[i] for i in train_index]
+        y_test = [labels[i] for i in test_index]
+
+        folds.append((X_train, X_test, y_train, y_test))
+    
+    return folds
+
+def preprocessed_dataloaders(X_train: pd.DataFrame, X_test: pd.DataFrame, y_train: list, y_test: list,
+                         shuffle: bool, batch_size: int):
+    # apply log function to all values
+    X_train = X_train.map(lambda x: log_skip_zeroes(x))
+    X_test = X_test.map(lambda x: log_skip_zeroes(x))
+    
     # scale data to be within 0-1
     scaler = MinMaxScaler((0,1))
     X_train = pd.DataFrame(scaler.fit_transform(X_train))
@@ -98,32 +118,92 @@ def train_test_dataloaders(data: pd.DataFrame, labels: list, test_size: float, s
     train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=shuffle)
     test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=shuffle)
 
-    return train_dataloader, test_dataloader
+    return (train_dataloader, test_dataloader)
 
-def kfolds_dataloaders(data: pd.DataFrame, labels: list, numfolds: int, shuffle: bool, random_state: int, batch_size: int):
-    if shuffle:
-        kf = KFold(n_splits=numfolds, shuffle=shuffle, random_state=42)
-    else:
-        kf = KFold(n_splits=numfolds, shuffle=shuffle)
-    kf.get_n_splits(data)
-    scaler = MinMaxScaler((0,1))    
+def extract_features_from_window(data: pd.Series):
+    '''
+    Extracts features from a window of actigraph data:
+        - Sample Mean
+        - Sample Std. Dev.
+        - Sample Skewness
+        - Sample Kurtosis
+        - Maximum
+        - Minimum
 
-    folds = []
-    for i, (train_index, test_index) in enumerate(kf.split(data)):
-        
-        X_train = data.iloc[train_index]
-        X_test = data.iloc[test_index]
-        y_train = [labels[i] for i in train_index]
-        y_test = [labels[i] for i in test_index]
+        - 1/2 win. change in means
+        - 1/2 win. change in max
+        - 1/2 win. change in min
 
-        X_train = pd.DataFrame(scaler.fit_transform(X_train))
-        X_test = pd.DataFrame(scaler.transform(X_test))
+        - 1/4 win. means
+        - 1/4 win. Std. Dev.
+        - 1/4 win. means paired differences 
+        - 1/4 win. max
+        - 1/4 win. min
+        - 1/4 win. maxes paired differences
+        - 1/4 win. mins paired differences
 
-        train_dataset = ActigraphDataset(X_train.to_numpy(), y_train)
-        test_dataset = ActigraphDataset(X_test.to_numpy(), y_test)
-        train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=shuffle)
-        test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=shuffle)
+        - Magnitude of Frequency Components of FFT
+        - Top 10 Frequency values
 
-        folds.append((train_dataloader, test_dataloader))
+    Args
+        - data: the data window to extract features from
     
-    return folds
+    Returns
+        - a dataframe containing a single row, where the index is the window label and the columns are the extracted features 
+    '''
+
+    # descriptive statistics
+    
+    desc_stats = pd.DataFrame(
+        {
+            'mean':[data.mean()],
+            'std':[data.std()],
+            'skew':[data.skew()],
+            'kurt':[data.kurt()],
+            'max':[data.max()],
+            'min':[data.min()]
+        }
+    )
+    
+    # half window statistics
+    
+    h_win = [data.iloc[0:len(data)//2], 
+                    data.iloc[len(data)//2:]]
+    half_stats = pd.DataFrame(
+        {
+            'h_mean_change':[h_win[1].mean() - h_win[0].mean()],
+            'h_max_change':[h_win[1].max() - h_win[0].max()],
+            'h_min_change':[h_win[1].min() - h_win[0].min()]
+        }
+    )
+    
+    # quarter window statistics
+    
+    quarter_stats = pd.DataFrame()
+    q_win = []
+    for i in range(0, len(data), len(data)//4):
+        win = data.iloc[i:i+len(data)//4]
+        quarter_stats[f'q{i+1}_mean'] = win.mean()
+        quarter_stats[f'q{i+1}_std'] = win.std()
+        quarter_stats[f'q{i+1}_max'] = win.max()
+        quarter_stats[f'q{i+1}_min'] = win.min()
+        q_win.append(win)
+    
+    # fast fourier transform
+    
+    zero_dc_data = data.map(lambda x: x - data.mean())
+    fourier_transform = rfft(zero_dc_data, len(zero_dc_data))
+    fourier_transform_a = np.abs(fourier_transform)
+    top_fourier = list(pd.Series(fourier_transform_a).sort_values(ascending=False).head(n=10).index)
+
+    fft_data = pd.DataFrame(fourier_transform_a).transpose()
+    fft_col_names = [f'fft_{i+1}' for i in range(len(fourier_transform_a))]
+    fft_data.columns = fft_col_names
+    for i in range(len(top_fourier)):
+        fft_data[f'fft_top_{i+1}'] = top_fourier[i]
+
+    features = pd.concat([desc_stats, half_stats, quarter_stats, fft_data], axis=1)
+
+    print(features)
+    plt.plot(fourier_transform_a)
+    plt.show()

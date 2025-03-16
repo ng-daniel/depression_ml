@@ -9,7 +9,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 from sklearn.preprocessing import MinMaxScaler
 
-from data import load_preprocess_dataframe_labels, train_test_dataloaders, kfolds_dataloaders
+from data import load_dataframe_labels, preprocessed_dataloaders, extract_features_from_window, kfolds_dataframes
 from engine import train_test
 from eval import eval_model
 from model import ConvNN, LSTM
@@ -20,11 +20,22 @@ print("Loading data...")
 # set device
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 # load dataframe
-actigraph_data, actigraph_labels = load_preprocess_dataframe_labels(dir_names = ["data/control", "data/condition"],
+actigraph_data, actigraph_labels = load_dataframe_labels(dir_names = ["data/control", "data/condition"],
                                                                     class_names = ["control", "condition"],
                                                                     time = "12:00:00")
-# load dataloaders
-kf_dataloaders = kfolds_dataloaders(actigraph_data, actigraph_labels, numfolds=4, shuffle=True, random_state=42, batch_size=32)
+
+extract_features_from_window(actigraph_data.iloc[0])
+
+# split data into folds
+NUM_FOLDS = 5
+kf_dataframes = kfolds_dataframes(actigraph_data, actigraph_labels, numfolds=NUM_FOLDS, shuffle=True, random_state=42, batch_size=32)
+kf_dataloaders = []
+for i in range(NUM_FOLDS):
+      (X_train, X_test, y_train, y_test) = kf_dataframes[i]
+      kf_dataloaders.append(
+            preprocessed_dataloaders(X_train, X_test, y_train, y_test,
+                                     shuffle = True, batch_size = 32)
+      )
 
 # model hyperparameters
 IN_SHAPE = 1

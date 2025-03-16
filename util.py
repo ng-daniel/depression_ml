@@ -28,7 +28,3 @@ def print_model_performance_table(model_performance_dicts: list):
     for d in model_performance_dicts:
         print(f"{d['model_name']:{NAME_COL_WIDTH}}{d['num_samples']:>{COL_WIDTH}}{d['loss']:>{COL_WIDTH}}{d['accuracy']:>{COL_WIDTH}}{d['precision']:>{COL_WIDTH}}{d['recall']:>{COL_WIDTH}}{d['f1score']:>{COL_WIDTH}}")
     print('-'*COL_WIDTH*(NUM_COLS-1) + '-'*NAME_COL_WIDTH)
-
-def weights_init(m):
-    if isinstance(m, nn.Conv2d):
-        torch.nn.init.xavier_uniform(m.weight.data)
