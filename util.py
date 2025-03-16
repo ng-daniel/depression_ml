@@ -17,6 +17,8 @@ def print_model_performance_table(model_performance_dicts: list):
     #calculate max name length
     max_name_length = 0
     for d in model_performance_dicts:
+        if len(d) == 0:
+            continue
         name_len = len(d['model_name'])
         if name_len > max_name_length:
             max_name_length = name_len
@@ -26,5 +28,8 @@ def print_model_performance_table(model_performance_dicts: list):
     print('-'*COL_WIDTH*(NUM_COLS-1) + '-'*NAME_COL_WIDTH)
     print(f"{'name':{NAME_COL_WIDTH}}{'#samples':>{COL_WIDTH}}{'loss':>{COL_WIDTH}}{'acc':>{COL_WIDTH}}{'prec':>{COL_WIDTH}}{'recall':>{COL_WIDTH}}{'f1':>{COL_WIDTH}}\n")
     for d in model_performance_dicts:
+        if len(d) == 0:
+            print()
+            continue
         print(f"{d['model_name']:{NAME_COL_WIDTH}}{d['num_samples']:>{COL_WIDTH}}{d['loss']:>{COL_WIDTH}}{d['accuracy']:>{COL_WIDTH}}{d['precision']:>{COL_WIDTH}}{d['recall']:>{COL_WIDTH}}{d['f1score']:>{COL_WIDTH}}")
     print('-'*COL_WIDTH*(NUM_COLS-1) + '-'*NAME_COL_WIDTH)

@@ -36,6 +36,13 @@ class LSTM(nn.Module):
         # print(x.shape)
         return x, (hn, cn)
 
+class ZeroR(nn.Module):
+    def __init__(self, device):
+        super().__init__()
+        self.device = device
+    def forward(self, x):
+        return torch.zeros(len(x)).unsqueeze(1).to(self.device)
+
 class ConvNN(nn.Module):
     def __init__(self, in_shape, output_dim, hidden_shape, flatten_factor):
         super().__init__()
