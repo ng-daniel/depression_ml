@@ -101,8 +101,7 @@ def kfolds_dataframes(data: pd.DataFrame, labels: list, numfolds: int, shuffle: 
     
     return folds
 
-def preprocessed_dataloaders(X_train: pd.DataFrame, X_test: pd.DataFrame, y_train: list, y_test: list,
-                         shuffle: bool, batch_size: int):
+def preprocess_train_test_dataframes(X_train: pd.DataFrame, X_test: pd.DataFrame):
     # apply log function to all values
     X_train = X_train.map(lambda x: log_skip_zeroes(x))
     X_test = X_test.map(lambda x: log_skip_zeroes(x))
@@ -112,6 +111,10 @@ def preprocessed_dataloaders(X_train: pd.DataFrame, X_test: pd.DataFrame, y_trai
     X_train = pd.DataFrame(scaler.fit_transform(X_train))
     X_test = pd.DataFrame(scaler.transform(X_test))
 
+    return (X_train, X_test)
+
+def create_dataloaders(X_train: pd.DataFrame, X_test: pd.DataFrame, y_train: list, y_test: list,
+                         shuffle: bool, batch_size: int):
     # wrap in pytorch dataloader
     train_dataset = ActigraphDataset(X_train.to_numpy(), y_train)
     test_dataset = ActigraphDataset(X_test.to_numpy(), y_test)
@@ -120,39 +123,21 @@ def preprocessed_dataloaders(X_train: pd.DataFrame, X_test: pd.DataFrame, y_trai
 
     return (train_dataloader, test_dataloader)
 
-def extract_features_from_window(data: pd.Series):
+def extract_stats_from_window(data: pd.Series):
     '''
-    Extracts features from a window of actigraph data:
-        - Sample Mean
-        - Sample Std. Dev.
-        - Sample Skewness
-        - Sample Kurtosis
-        - Maximum
-        - Minimum
-
-        - 1/2 win. change in means
-        - 1/2 win. change in max
-        - 1/2 win. change in min
-
-        - 1/4 win. means
-        - 1/4 win. Std. Dev.
-        - 1/4 win. means paired differences 
-        - 1/4 win. max
-        - 1/4 win. min
-        - 1/4 win. maxes paired differences
-        - 1/4 win. mins paired differences
-
-        - Magnitude of Frequency Components of FFT
-        - Top 10 Frequency values
+    Extracts stats from a window of actigraph data (total of ):
+        - Sample Mean, Sample Std. Dev., Sample Skewness, Sample Kurtosis, Max, Min (6)
+        - 1/2 win. change in means, max, min (3)
+        - 1/4 win. means, Std. Dev.s, maxes, mins (16)
+        - 1/4 win. means paired differences, maxes paired differences, mins paired differences
 
     Args
-        - data: the data window to extract features from
+        - data: the actigraphy data series window to extract features from
     
     Returns
-        - a dataframe containing a single row, where the index is the window label and the columns are the extracted features 
+        - a dataframe containing a single row, where the columns are the extracted features 
     '''
-
-    # descriptive statistics
+    # loading descriptive statistics
     
     desc_stats = pd.DataFrame(
         {
@@ -165,10 +150,9 @@ def extract_features_from_window(data: pd.Series):
         }
     )
     
-    # half window statistics
+    # calculating half window statistics
     
-    h_win = [data.iloc[0:len(data)//2], 
-                    data.iloc[len(data)//2:]]
+    h_win = [data.iloc[0:len(data)//2], data.iloc[len(data)//2:]]
     half_stats = pd.DataFrame(
         {
             'h_mean_change':[h_win[1].mean() - h_win[0].mean()],
@@ -177,7 +161,7 @@ def extract_features_from_window(data: pd.Series):
         }
     )
     
-    # quarter window statistics
+    # calculating quarter window statistics
     
     quarter_stats = pd.DataFrame()
     q_win = []
@@ -188,22 +172,52 @@ def extract_features_from_window(data: pd.Series):
         quarter_stats[f'q{i+1}_max'] = win.max()
         quarter_stats[f'q{i+1}_min'] = win.min()
         q_win.append(win)
+
+    # concatenating all dfs into a single df
+    features = pd.concat([desc_stats, half_stats, quarter_stats], axis=1)
+    return features.iloc[0]
+
+def extract_fft_from_window(data: pd.Series):
+    '''
+    Extract signal information from a window of actigraph data using a fast fourier transform:
+        - Magnitude of Frequency Components of FFT (720)
+        - Top 10 Frequency values
+    '''
+    # calculating fft values and listing the top 10 largest amplitudes
     
-    # fast fourier transform
-    
+    scaler = MinMaxScaler((0,1))
     zero_dc_data = data.map(lambda x: x - data.mean())
     fourier_transform = rfft(zero_dc_data, len(zero_dc_data))
-    fourier_transform_a = np.abs(fourier_transform)
-    top_fourier = list(pd.Series(fourier_transform_a).sort_values(ascending=False).head(n=10).index)
+    ft_abs_scaled = scaler.fit_transform(np.abs(fourier_transform).reshape(-1, 1)).squeeze()
+    top_fourier = list(pd.Series(ft_abs_scaled).sort_values(ascending=False).head(n=10).index)
+    
+    # dividing by number of frequencies to keep values at a reasonable value for ML
 
-    fft_data = pd.DataFrame(fourier_transform_a).transpose()
-    fft_col_names = [f'fft_{i+1}' for i in range(len(fourier_transform_a))]
+    top_fourier = [freq / len(ft_abs_scaled) for freq in top_fourier]
+    
+    # loading values into a dataframe with descriptive column names
+    
+    fft_data = pd.DataFrame(ft_abs_scaled).transpose()
+    fft_col_names = [f'fft_{i+1}' for i in range(len(ft_abs_scaled))]
     fft_data.columns = fft_col_names
     for i in range(len(top_fourier)):
         fft_data[f'fft_top_{i+1}'] = top_fourier[i]
+    return fft_data.iloc[0]
 
-    features = pd.concat([desc_stats, half_stats, quarter_stats, fft_data], axis=1)
+def create_feature_dataframe(data: pd.DataFrame, raw_data: pd.DataFrame):
+    feature_rows = []
 
+    # for i in range(len(data)):
+    #     win = data.iloc[i]
+    #     raw_win = raw_data.iloc[i]
+    #     stats_row = extract_stats_from_window(win)
+    #     fft_row = extract_fft_from_window(raw_win)
+    #     feature_row = pd.concat([stats_row, fft_row], axis = 1)
+    #     feature_rows.append(feature_row)
+
+    extracted_stats = data.apply(extract_stats_from_window, axis=1).reset_index(drop=True)
+    extracted_fft = raw_data.apply(extract_fft_from_window, axis=1).reset_index(drop=True)
+    features = pd.concat([extracted_stats, extracted_fft], axis=1, )
     print(features)
-    plt.plot(fourier_transform_a)
-    plt.show()
+    features.index = data.index
+    return features
