@@ -6,8 +6,7 @@ print("Loading libraries...")
 import pandas as pd
 import torch
 import torch.nn as nn
-from torch.utils.data import DataLoader
-from sklearn.preprocessing import MinMaxScaler
+from tqdm import tqdm
 
 from data import load_dataframe_labels, preprocess_train_test_dataframes, create_feature_dataframe, create_dataloaders, kfolds_dataframes
 from engine import train_test
@@ -24,14 +23,14 @@ actigraph_data, actigraph_labels = load_dataframe_labels(dir_names = ["data/cont
                                                                     class_names = ["control", "condition"],
                                                                     time = "12:00:00")
 
-print("Loading folds...")
+print("Loading folds and extracting features...")
 
 NUM_FOLDS = 5
 kf_dfs = kfolds_dataframes(actigraph_data, actigraph_labels, numfolds=NUM_FOLDS, shuffle=True, random_state=42, batch_size=32)
 kf_dataloaders = []
 kf_feature_dfs = []
 kf_feature_dataloaders = []
-for i in range(NUM_FOLDS):
+for i in tqdm(range(NUM_FOLDS), dynamic_ncols=True):
       (X_train, X_test, y_train, y_test) = kf_dfs[i]
       (X_train_p, X_test_p) = preprocess_train_test_dataframes(X_train, X_test)
       
@@ -45,26 +44,26 @@ for i in range(NUM_FOLDS):
       # load feature folds
 
       X_train_features = create_feature_dataframe(data = X_train_p, raw_data = X_train)
-      print(X_train_features.shape)
       X_test_features = create_feature_dataframe(data = X_test_p, raw_data = X_test)
-      kf_feature_dfs.append((X_train_features, X_test_features, ))
+      kf_feature_dfs.append((X_train_features, X_test_features))
       kf_feature_dataloaders.append(
             create_dataloaders(X_train_features, X_test_features, y_train, y_test,
                                shuffle = True, batch_size = 32)
       )
+      #print(f"{i+1}/{NUM_FOLDS}")
 
-# model hyperparameters
+# construct CNN model
 IN_0 = 1
 OUT_0 = 1
 HIDDEN_0 = 32
 FLATTEN_0 = 720
-# construct CNN model
 model_0 = ConvNN(IN_0, OUT_0, HIDDEN_0, FLATTEN_0).to(device)
 init_params = model_0.state_dict()
 
-#IN_1 = 
-
-#model_1 = FeatureMLP()
+IN_1 = 756
+OUT_1 = 1
+HIDDEN_1 = 128
+model_1 = FeatureMLP(IN_1, OUT_1, HIDDEN_1).to(device)
 
 # define criterion
 criterion = nn.BCEWithLogitsLoss().to(device)
@@ -97,6 +96,28 @@ for i, (train_dataloader, test_dataloader) in enumerate(kf_dataloaders):
             criterion=criterion, device=device, verbose=True)
       results.append(
             eval_model(model = model_0,
+                       note = f"fold_{i}",
+                       dataloader = test_dataloader,
+                       criterion = criterion,
+                       device = device)
+      )
+print("----------------")
+
+results.append({})
+
+# MLP training
+for i, (train_dataloader, test_dataloader) in enumerate(kf_feature_dataloaders):
+      # reset model
+      model_1 = FeatureMLP(IN_1, OUT_1, HIDDEN_1).to(device)
+      optimizer = torch.optim.Adam(params = model_1.parameters(), lr=0.01)
+      # train model
+      print(f"fold_{i+1}...")
+      print(next(iter(train_dataloader))[0].shape)
+      
+      train_test(model_1, train_dataloader, test_dataloader, epochs = 10, optimizer=optimizer, 
+            criterion=criterion, device=device, verbose=True)
+      results.append(
+            eval_model(model = model_1,
                        note = f"fold_{i}",
                        dataloader = test_dataloader,
                        criterion = criterion,

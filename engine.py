@@ -10,10 +10,10 @@ def train_step(model: torch.nn, dataloader: DataLoader, optimizer, criterion, de
 
         # forward pass
         out = model(X)
-        preds = out.squeeze(dim=1).sigmoid().round()
+        preds = out.squeeze().sigmoid().round()
 
         # calculate loss
-        loss = criterion(out.squeeze(dim=1), y)
+        loss = criterion(out.squeeze(), y)
 
         # aggregate loss, accuracy
         train_loss += loss.item()
@@ -35,10 +35,10 @@ def test_step(model: torch.nn, dataloader: DataLoader, criterion, device):
 
             # forward pass
             out = model(X)
-            preds = out.squeeze(dim=1).sigmoid().round()
+            preds = out.squeeze().sigmoid().round()
 
             # calculate loss
-            loss = criterion(out.squeeze(dim=1), y)
+            loss = criterion(out.squeeze(), y)
 
             # aggregate loss, accuracy
             test_loss += loss.item()

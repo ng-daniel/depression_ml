@@ -75,3 +75,29 @@ class ConvNN(nn.Module):
         x = self.linear(x)
         #print(x.shape)
         return x
+
+class FeatureMLP(nn.Module):
+    def __init__(self, in_shape, out_shape, hidden_shape):
+        super().__init__()
+        self.linear_1 = nn.Sequential(
+            nn.Linear(in_shape, hidden_shape),
+            nn.Dropout(),
+            nn.ReLU(),
+        )
+        self.linear_2 = nn.Sequential(
+            nn.Linear(hidden_shape, hidden_shape),
+            nn.Dropout(),
+            nn.ReLU(),
+        )
+        self.linear_3 = nn.Sequential(
+            nn.Linear(hidden_shape, out_shape)
+        )
+    def forward(self, x):
+        #print(x.shape)
+        x = self.linear_1(x)
+        #print(x.shape)
+        x = self.linear_2(x)
+        #print(x.shape)
+        x = self.linear_3(x)
+        #print(x.shape)
+        return x

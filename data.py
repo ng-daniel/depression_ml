@@ -136,46 +136,40 @@ def extract_stats_from_window(data: pd.Series):
     
     Returns
         - a dataframe containing a single row, where the columns are the extracted features 
-    '''
+    '''     
+    stats = []
+    labels = []
+
     # loading descriptive statistics
-    
-    desc_stats = pd.DataFrame(
-        {
-            'mean':[data.mean()],
-            'std':[data.std()],
-            'skew':[data.skew()],
-            'kurt':[data.kurt()],
-            'max':[data.max()],
-            'min':[data.min()]
-        }
-    )
+    labels.extend(['mean', 'std', 'skew', 'kurt', 'max', 'min'])
+    stats.extend([data.mean(), data.std(), data.skew(), data.kurt(), data.max(), data.min()])
     
     # calculating half window statistics
-    
     h_win = [data.iloc[0:len(data)//2], data.iloc[len(data)//2:]]
-    half_stats = pd.DataFrame(
-        {
-            'h_mean_change':[h_win[1].mean() - h_win[0].mean()],
-            'h_max_change':[h_win[1].max() - h_win[0].max()],
-            'h_min_change':[h_win[1].min() - h_win[0].min()]
-        }
-    )
+    labels.extend(['h_mean_change', 'h_max_change', 'h_min_change'])
+    stats.extend([h_win[1].mean() - h_win[0].mean(), h_win[1].max() - h_win[0].max(), h_win[1].min() - h_win[0].min()])
     
     # calculating quarter window statistics
-    
-    quarter_stats = pd.DataFrame()
     q_win = []
     for i in range(0, len(data), len(data)//4):
         win = data.iloc[i:i+len(data)//4]
-        quarter_stats[f'q{i+1}_mean'] = win.mean()
-        quarter_stats[f'q{i+1}_std'] = win.std()
-        quarter_stats[f'q{i+1}_max'] = win.max()
-        quarter_stats[f'q{i+1}_min'] = win.min()
         q_win.append(win)
-
-    # concatenating all dfs into a single df
-    features = pd.concat([desc_stats, half_stats, quarter_stats], axis=1)
-    return features.iloc[0]
+    
+    labels.extend([f'q{i}_mean' for i in range(1,len(q_win)+1)])
+    stats.extend([win.mean() for win in q_win])
+    
+    labels.extend([f'q{i}_std' for i in range(1,len(q_win)+1)])
+    stats.extend([win.std() for win in q_win])
+    
+    labels.extend([f'q{i}_max' for i in range(1,len(q_win)+1)])
+    stats.extend([win.max() for win in q_win])
+    
+    labels.extend([f'q{i}_min' for i in range(1,len(q_win)+1)])
+    stats.extend([win.min() for win in q_win])
+    
+    # convert stats and labels into series
+    features = pd.Series(stats, index = labels)
+    return features
 
 def extract_fft_from_window(data: pd.Series):
     '''
@@ -195,14 +189,12 @@ def extract_fft_from_window(data: pd.Series):
 
     top_fourier = [freq / len(ft_abs_scaled) for freq in top_fourier]
     
-    # loading values into a dataframe with descriptive column names
+    # loading values into a series with descriptive index
     
-    fft_data = pd.DataFrame(ft_abs_scaled).transpose()
-    fft_col_names = [f'fft_{i+1}' for i in range(len(ft_abs_scaled))]
-    fft_data.columns = fft_col_names
-    for i in range(len(top_fourier)):
-        fft_data[f'fft_top_{i+1}'] = top_fourier[i]
-    return fft_data.iloc[0]
+    fft_col_names = [f'fft_{i+1}' for i in range(len(ft_abs_scaled))] + [f'fft_top_{i+1}' for i in range(len(top_fourier))]
+    fft_features = list(ft_abs_scaled) + top_fourier
+    fft_data = pd.Series(fft_features, index = fft_col_names)
+    return fft_data
 
 def create_feature_dataframe(data: pd.DataFrame, raw_data: pd.DataFrame):
     feature_rows = []
@@ -218,6 +210,7 @@ def create_feature_dataframe(data: pd.DataFrame, raw_data: pd.DataFrame):
     extracted_stats = data.apply(extract_stats_from_window, axis=1).reset_index(drop=True)
     extracted_fft = raw_data.apply(extract_fft_from_window, axis=1).reset_index(drop=True)
     features = pd.concat([extracted_stats, extracted_fft], axis=1, )
-    print(features)
+    #print(extracted_stats.head(n=3))
+    #print(extracted_fft.head(n=3))
     features.index = data.index
     return features

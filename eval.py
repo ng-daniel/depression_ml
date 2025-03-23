@@ -23,10 +23,10 @@ def eval_model(model: torch.nn, dataloader: DataLoader, criterion: torch.nn, dev
 
             # forward pass
             out = model(X)
-            preds = out.squeeze(dim=1).sigmoid().round()
+            preds = out.squeeze().sigmoid().round()
 
             # calculate loss
-            loss = criterion(out.squeeze(dim=1), y)
+            loss = criterion(out.squeeze(), y)
 
             # aggregate metrics
             test_loss += loss.item()
