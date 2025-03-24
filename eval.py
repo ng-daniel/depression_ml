@@ -1,6 +1,8 @@
 import numpy as np
+import pandas as pd
 import torch
 from torch.utils.data import DataLoader
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import precision_recall_fscore_support
 
 def eval_model(model: torch.nn, dataloader: DataLoader, criterion: torch.nn, device, note=None):
@@ -51,6 +53,32 @@ def eval_model(model: torch.nn, dataloader: DataLoader, criterion: torch.nn, dev
             'num_samples': f"{num_items}",
             'loss': f"{test_loss:.4f}",
             'accuracy': f"{(100*test_acc):.2f}%",
-            'precision': f"{test_loss:.4f}",
+            'precision': f"{test_precision:.4f}",
+            'recall': f"{test_recall:.4f}",
+            'f1score': f"{test_fscore:.4f}"}
+
+def eval_forest_model(model: RandomForestClassifier, X_test: pd.DataFrame, y_test: list, criterion: torch.nn, note=None):
+
+    num_items = len(y_test)
+
+    model_name = type(model).__name__
+    if note:
+        model_name += ": "+note
+    
+    y_pred = model.predict(X_test)
+
+    test_loss = criterion(torch.tensor(y_pred).float(), torch.tensor(y_test).float())
+    test_acc = (y_pred == y_test).sum() / len(y_test)
+    test_precision, test_recall, test_fscore, _ = precision_recall_fscore_support(
+                                                    y_true = torch.tensor(y_test),
+                                                    y_pred = torch.tensor(y_pred),
+                                                    average = 'binary',
+                                                    zero_division=np.nan)
+    
+    return {'model_name': model_name,
+            'num_samples': f"{num_items}",
+            'loss': f"{test_loss:.4f}",
+            'accuracy': f"{(100*test_acc):.2f}%",
+            'precision': f"{test_precision:.4f}",
             'recall': f"{test_recall:.4f}",
             'f1score': f"{test_fscore:.4f}"}
