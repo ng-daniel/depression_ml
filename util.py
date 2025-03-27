@@ -10,6 +10,7 @@ def log_skip_zeroes(x):
 def print_model_performance_table(model_performance_dicts: list):
     '''
     Each Column is 10 spaces across
+    NOT USING ANYMORE
     '''
     COL_WIDTH = 8
     NUM_COLS = 7

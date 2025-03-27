@@ -22,16 +22,17 @@ device = 'cuda' if torch.cuda.is_available() else 'cpu'
 # load dataframe
 actigraph_data, actigraph_labels = load_dataframe_labels(dir_names = ["data/control", "data/condition"],
                                                                     class_names = ["control", "condition"],
-                                                                    time = "12:00:00")
+                                                                    time = "12:00:00", undersample=True)
 
 print("Loading folds and extracting features...")
 
-NUM_FOLDS = 5
+NUM_FOLDS = 4
+NUM_DATAFRAMES = 4
 kf_dfs = kfolds_dataframes(actigraph_data, actigraph_labels, numfolds=NUM_FOLDS, shuffle=True, random_state=42, batch_size=32)
 kf_dataloaders = []
 kf_feature_dfs = []
 kf_feature_dataloaders = []
-for i in tqdm(range(NUM_FOLDS), ncols=50, leave=True):
+for i in tqdm(range(NUM_DATAFRAMES), ncols=50, leave=True):
       (X_train, X_test, y_train, y_test) = kf_dfs[i]
       (X_train_p, X_test_p) = preprocess_train_test_dataframes(X_train, X_test)
       
@@ -72,8 +73,6 @@ for i, (train_dataloader, test_dataloader) in enumerate(kf_dataloaders):
                        device = device)
       )
 
-results.append({})
-
 # convNN training
 
 IN_0 = 1
@@ -97,8 +96,6 @@ for i, (train_dataloader, test_dataloader) in enumerate(kf_dataloaders):
       )
 print("----------------")
 
-results.append({})
-
 # MLP training
 
 IN_1 = 756
@@ -121,8 +118,6 @@ for i, (train_dataloader, test_dataloader) in enumerate(kf_feature_dataloaders):
       )
 print("----------------")
 
-results.append({})
-
 # random forest training
 
 for i, (X_train, X_test, y_train, y_test) in enumerate(kf_feature_dfs):
@@ -140,7 +135,10 @@ for i, (X_train, X_test, y_train, y_test) in enumerate(kf_feature_dfs):
       )
 print("----------------")
 
-print("Evaluating...")
-print_model_performance_table(results)
+print("Results:")
+
+results_df = pd.concat(results, axis=1).transpose()
+results_df.set_index(['model_name'])
+print(results_df)
 
 print("Done.")

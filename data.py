@@ -35,8 +35,11 @@ class ActigraphDataset(Dataset):
         '''
         return X, y
 
-def concat_data(dir_name: str, class_type: str, class_label: int, start_time: str, output_df: pd.DataFrame, scores_df: pd.DataFrame):
+def load_data_from_folder(dir_name: str, class_type: str, class_label: int, output_df: pd.DataFrame, scores_df: pd.DataFrame, start_time: str = None):
 
+    data = pd.DataFrame()
+    day_dfs = []
+    
     dir_size = len(os.listdir(dir_name))
     for i in range(1, dir_size + 1):
         
@@ -49,7 +52,11 @@ def concat_data(dir_name: str, class_type: str, class_label: int, start_time: st
         # find occurences of 
 
         sr = file_df['timestamp'].map(lambda x: x.split()[1])
-        indexes_of_time = list(sr[sr==start_time].index)
+        indexes_of_time = []
+        if start_time:
+            indexes_of_time = list(sr[sr==start_time].index)
+        else:
+            indexes_of_time = [idx for idx in range(0, len(sr), 1440)]
 
         # split file_df into intervals of days
 
@@ -59,20 +66,36 @@ def concat_data(dir_name: str, class_type: str, class_label: int, start_time: st
             day_df = file_df.iloc[interval[0]:interval[1]]
             day_df = day_df['activity'].rename(f"{class_label}_{i}_{j}").reset_index(drop=True)
             
-            # concatenate data column to output dataframe
-            if(len(day_df) == 1440):
-                output_df = pd.concat([output_df, day_df], axis=1)
+            # add data column to list of data columns (ignoring incomplete days)
+            if len(day_df) == 1440:
+                day_dfs.append(day_df)
+    
+    # concatenate all columns into single dataframe
+    data = pd.concat(day_dfs, axis=1)
 
-    return output_df
+    return data
 
-def load_dataframe_labels(dir_names: list, class_names: list, time: str):
+def load_dataframe_labels(dir_names: list, class_names: list, time: str = None, undersample: bool = False):
     # load scores dataframe (information about each datafile)
     scores = pd.read_csv("data/scores.csv", index_col='number')
-    # fill dataframe
+    
+    # fill control and condition dataframes
     data = pd.DataFrame()
+    dfs = []
     for CLASS in range(len(dir_names)):
-        data = concat_data(dir_names[CLASS], class_names[CLASS], 
-                                    CLASS, time, data, scores)
+        dfs.append(
+            load_data_from_folder(dir_names[CLASS], class_names[CLASS], 
+                                    CLASS, data, scores, time)
+        )
+    # truncate control dataframe to match condition dataframe's number of samples
+    if undersample:
+        dfs[0] = dfs[0].iloc[:,0:len(dfs[1].columns)]
+        print(len(dfs[1].columns))
+        print(dfs[0])
+        print(dfs[1])
+    
+    # combine control and condition dfs
+    data = pd.concat(dfs, axis=1)
     # transpose data so columns are time and rows are subjects
     data = data.transpose()
     # set labels
