@@ -27,14 +27,10 @@ kf_feature_dfs = []
 for i in tqdm(range(NUM_FOLDS), ncols=50, leave=False):
     (X_train, X_test, y_train, y_test) = kf_dfs[i]
 
-    print(X_train)
-
     # load actigraphy folds
 
     (X_train_p, X_test_p) = preprocess_train_test_dataframes(X_train, X_test)
     kf_actigraphy_dfs.append((X_train_p, X_test_p, y_train, y_test))
-
-    print(X_train_p)
 
     # load feature folds
 
@@ -51,8 +47,6 @@ for i, (X_train, X_test, y_train, y_test) in enumerate(kf_actigraphy_dfs):
     X_train['label'] = y_train
     X_test['label'] = y_test
 
-    print(X_train)
-
     X_train.to_csv(EXPORT_DIR_ACTIGRAPHY.joinpath(f"a{i}t.csv"), index=True)
     X_test.to_csv(EXPORT_DIR_ACTIGRAPHY.joinpath(f"a{i}e.csv"), index=True)
 
@@ -62,8 +56,6 @@ EXPORT_DIR_FEATURE = Path("data/processed_dataframes/feature")
 for i, (X_train, X_test, y_train, y_test) in enumerate(kf_feature_dfs):
     X_train['label'] = y_train
     X_test['label'] = y_test
-
-    print(X_train)
 
     X_train.to_csv(EXPORT_DIR_FEATURE.joinpath(f"f{i}t.csv"), index=True)
     X_test.to_csv(EXPORT_DIR_FEATURE.joinpath(f"f{i}e.csv"), index=True)

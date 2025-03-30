@@ -17,9 +17,8 @@ from engine import train_test
 from eval import eval_model, eval_forest_model
 from model import ZeroR, ConvNN, LSTM, FeatureMLP
 
-print("Loading raw dataframe...")
-
 # set device
+
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 print("Loading dataframes from files...")
@@ -48,9 +47,6 @@ for i in range(int(num_a / 2)):
 
       X_train.drop('label', axis=1, inplace=True)
       X_test.drop('label', axis=1, inplace=True)
-
-      print(X_train)
-      print(y_train)
 
       # load dataframes
 
@@ -85,97 +81,136 @@ for i in range(int(num_f / 2)):
             create_dataloaders(X_train, X_test, y_train, y_test, shuffle=True, batch_size=32)
       )
 
-print("Training...")
-print("----------------")
+print("Training models...")
 
 RESULTS_DIR = "results"
 
 # define criterion
 criterion = nn.BCEWithLogitsLoss().to(device)
 
+#
 # zeroR baseline
+#
+
+print("ZeroR Baseline:")
 
 zeroR_results = []
-print(len(kf_actigraphy_dataloaders))
-for i, (train_dataloader, test_dataloader) in enumerate(kf_actigraphy_dataloaders):
+for i, (train_dataloader, test_dataloader) in enumerate(tqdm(kf_actigraphy_dataloaders, ncols=50)):
       model_0R = ZeroR(device)
       zeroR_results.append(
             eval_model(model = model_0R,
-                       note = f"fold_{i}",
+                       note = f"{i}",
                        dataloader = test_dataloader,
                        criterion = criterion,
                        device = device)
       )
-print(zeroR_results)
 zeroR_results = pd.concat(zeroR_results, axis=1).transpose()
-zeroR_results.to_csv(os.path.join(RESULTS_DIR, "zeroR"))
+zeroR_results.to_csv(os.path.join(RESULTS_DIR, "zeroR.csv"))
 
+#
 # convNN training
+#
+
+print("1D Convolutional NN:")
 
 cnn_results = []
 IN_0 = 1
 OUT_0 = 1
 HIDDEN_0 = 32
 FLATTEN_0 = 720
-for i, (train_dataloader, test_dataloader) in enumerate(kf_actigraphy_dataloaders):
+for i, (train_dataloader, test_dataloader) in enumerate(tqdm(kf_actigraphy_dataloaders, ncols=50)):
       # reset model
       model_0 = ConvNN(IN_0, OUT_0, HIDDEN_0, FLATTEN_0).to(device)
       optimizer = torch.optim.Adam(params = model_0.parameters(), lr=0.001)
       # train model
-      print(f"fold_{i+1}...")
       train_test(model_0, train_dataloader, test_dataloader, epochs = 10, optimizer=optimizer, 
             criterion=criterion, device=device, verbose=False)
       cnn_results.append(
             eval_model(model = model_0,
-                       note = f"fold_{i}",
+                       note = f"{i}",
                        dataloader = test_dataloader,
                        criterion = criterion,
                        device = device)
       )
 cnn_results = pd.concat(cnn_results, axis=1).transpose()
-cnn_results.to_csv(os.path.join(RESULTS_DIR, "cnn"))
+cnn_results.to_csv(os.path.join(RESULTS_DIR, "cnn.csv"))
 
+#
 # MLP training
+#
+
+print("Extracted Features MLP:")
 
 mlp_results = []
 IN_1 = 756
 OUT_1 = 1
 HIDDEN_1 = 128
-for i, (train_dataloader, test_dataloader) in enumerate(kf_feature_dataloaders):
+for i, (train_dataloader, test_dataloader) in enumerate(tqdm(kf_feature_dataloaders, ncols=50)):
       # reset model
       model_1 = FeatureMLP(IN_1, OUT_1, HIDDEN_1).to(device)
       optimizer = torch.optim.Adam(params = model_1.parameters(), lr=0.01)
       # train model
-      print(f"fold_{i+1}...")
       train_test(model_1, train_dataloader, test_dataloader, epochs = 10, optimizer=optimizer, 
             criterion=criterion, device=device, verbose=False)
       mlp_results.append(
             eval_model(model = model_1,
-                       note = f"fold_{i}",
+                       note = f"{i}",
                        dataloader = test_dataloader,
                        criterion = criterion,
                        device = device)
       )
 mlp_results = pd.concat(mlp_results, axis=1).transpose()
-mlp_results.to_csv(os.path.join(RESULTS_DIR, "mlp"))
+mlp_results.to_csv(os.path.join(RESULTS_DIR, "mlp.csv"))
 
+#
+# LSTM training
+#
+
+# cnn_results = []
+# IN_2 = 1
+# OUT_2 = 1
+# HIDDEN_2 = 32
+# LSTM_LAYERS = 720
+# for i, (train_dataloader, test_dataloader) in enumerate(kf_actigraphy_dataloaders):
+#       # reset model
+#       model_0 = ConvNN(IN_2, OUT_2, HIDDEN_2, LSTM_LAYERS).to(device)
+      
+#       optimizer = torch.optim.Adam(params = model_0.parameters(), lr=0.001)
+#       # train model
+#       print(f"fold_{i+1}...")
+#       train_test(model_0, train_dataloader, test_dataloader, epochs = 10, optimizer=optimizer, 
+#             criterion=criterion, device=device, verbose=False)
+#       cnn_results.append(
+#             eval_model(model = model_0,
+#                        note = f"fold_{i}",
+#                        dataloader = test_dataloader,
+#                        criterion = criterion,
+#                        device = device)
+#       )
+# cnn_results = pd.concat(cnn_results, axis=1).transpose()
+# cnn_results.to_csv(os.path.join(RESULTS_DIR, "cnn.csv"))
+
+
+#
 # random forest training
+#
+
+print("Extracted Features Random Forest:")
 
 forest_results = []
-for i, (X_train, X_test, y_train, y_test) in enumerate(kf_feature_dfs):
+for i, (X_train, X_test, y_train, y_test) in enumerate(tqdm(kf_feature_dfs, ncols=50)):
       # reset model
       model_2 = RandomForestClassifier()
       # train model
-      print(f"fold_{i+1}...")
       model_2.fit(X_train, y_train)
       forest_results.append(
             eval_forest_model(model = model_2,
-                              note = f"fold_{i}",
+                              note = f"{i}",
                               X_test=X_test,
                               y_test=y_test,
                               criterion = criterion)
       )
 forest_results = pd.concat(forest_results, axis=1).transpose()
-forest_results.to_csv(os.path.join(RESULTS_DIR, "random_forest"))
+forest_results.to_csv(os.path.join(RESULTS_DIR, "random_forest.csv"))
 
 print("Done.")
