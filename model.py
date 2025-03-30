@@ -63,7 +63,7 @@ class ConvNN(nn.Module):
         self.linear = nn.Sequential(
             nn.Flatten(),
             nn.Linear(hidden_shape * flatten_factor, hidden_shape),
-            nn.Dropout(p=0.5),
+            # nn.Dropout(p=0.5),
             nn.ReLU(),
             nn.Linear(hidden_shape, output_dim)
         )

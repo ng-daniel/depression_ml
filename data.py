@@ -36,7 +36,6 @@ class ActigraphDataset(Dataset):
         return X, y
 
 def load_data_from_folder(dir_name: str, class_type: str, class_label: int, output_df: pd.DataFrame, scores_df: pd.DataFrame, start_time: str = None):
-
     data = pd.DataFrame()
     day_dfs = []
     
@@ -131,10 +130,16 @@ def preprocess_train_test_dataframes(X_train: pd.DataFrame, X_test: pd.DataFrame
     
     # scale data to be within 0-1
     scaler = MinMaxScaler((0,1))
-    X_train = pd.DataFrame(scaler.fit_transform(X_train))
-    X_test = pd.DataFrame(scaler.transform(X_test))
+    X_train_p = pd.DataFrame(scaler.fit_transform(X_train))
+    X_test_p = pd.DataFrame(scaler.transform(X_test))
 
-    return (X_train, X_test)
+    X_train_p.index = X_train.index
+    X_test_p.index = X_test.index
+
+    return (X_train_p, X_test_p)
+
+def load_dataframes_from_folders():
+    pass
 
 def create_dataloaders(X_train: pd.DataFrame, X_test: pd.DataFrame, y_train: list, y_test: list,
                          shuffle: bool, batch_size: int):
@@ -236,4 +241,6 @@ def create_feature_dataframe(data: pd.DataFrame, raw_data: pd.DataFrame):
     #print(extracted_stats.head(n=3))
     #print(extracted_fft.head(n=3))
     features.index = data.index
+    print(data.index)
+    print(features)
     return features
