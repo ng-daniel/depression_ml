@@ -236,7 +236,8 @@ def create_feature_dataframe(data: pd.DataFrame, raw_data: pd.DataFrame):
     #     feature_rows.append(feature_row)
 
     extracted_stats = data.apply(extract_stats_from_window, axis=1).reset_index(drop=True)
-    extracted_fft = raw_data.apply(extract_fft_from_window, axis=1).reset_index(drop=True)
-    features = pd.concat([extracted_stats, extracted_fft], axis=1, )
+    # extracted_fft = raw_data.apply(extract_fft_from_window, axis=1).reset_index(drop=True)
+    # features = pd.concat([extracted_stats, extracted_fft], axis=1)
+    features =  extracted_stats
     features.index = data.index
     return features

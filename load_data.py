@@ -19,7 +19,7 @@ actigraph_data, actigraph_labels = load_dataframe_labels(dir_names = ["data/cont
                                                                     time = "12:00:00", undersample=False)
 print("Loading folds and extracting features...")
 
-NUM_FOLDS = 5
+NUM_FOLDS = 10
 kf_dfs = kfolds_dataframes(actigraph_data, actigraph_labels, numfolds=NUM_FOLDS, shuffle=True, random_state=42, batch_size=32)
 
 kf_actigraphy_dfs = []

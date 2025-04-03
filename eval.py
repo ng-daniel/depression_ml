@@ -5,6 +5,8 @@ from torch.utils.data import DataLoader
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import precision_score, recall_score, f1_score, precision_recall_fscore_support
 
+LABELS = ['model_name', 'note', 'loss', 'acc', 'prec0', 'prec1', 'rec0', 'rec1', 'f1sc0', 'f1sc1', 'sup0', 'sup1']
+
 def eval_model(model: torch.nn, dataloader: DataLoader, criterion: torch.nn, device, note=None):
     
     test_loss = 0
@@ -15,9 +17,7 @@ def eval_model(model: torch.nn, dataloader: DataLoader, criterion: torch.nn, dev
     test_support = [0 for _ in range(2)]
 
     model_name = type(model).__name__
-    if note:
-        model_name += ": "+note
-
+    
     model.eval()
     with torch.inference_mode():
         for _, (X, y) in enumerate(dataloader):
@@ -36,14 +36,14 @@ def eval_model(model: torch.nn, dataloader: DataLoader, criterion: torch.nn, dev
 
             precision, recall, fscore, support = precision_recall_fscore_support(y.cpu(), preds.cpu(), zero_division=np.nan)
             
-            test_precision[0] += precision[0]
-            test_precision[1] += precision[1]
-            test_recall[0] += recall[0]
-            test_recall[1] += recall[1]
-            test_fscore[0] += fscore[0]
-            test_fscore[1] += fscore[1]
-            test_support[0] += support[0]
-            test_support[1] += support[1]
+            test_precision[0] += precision[0] if len(precision) > 0 else 0
+            test_precision[1] += precision[1] if len(precision) > 1 else 0
+            test_recall[0] += recall[0] if len(recall) > 0 else 0
+            test_recall[1] += recall[1] if len(recall) > 1 else 0
+            test_fscore[0] += fscore[0] if len(fscore) > 0 else 0
+            test_fscore[1] += fscore[1] if len(fscore) > 1 else 0
+            test_support[0] += support[0] if len(support) > 0  else 0
+            test_support[1] += support[1] if len(support) > 1  else 0
 
     # calculate average metrics
     test_loss /= len(dataloader)
@@ -55,17 +55,15 @@ def eval_model(model: torch.nn, dataloader: DataLoader, criterion: torch.nn, dev
     test_fscore[0] /= len(dataloader)
     test_fscore[1] /= len(dataloader)
 
-    labels = ['model_name', 'loss', 'acc', 'prec0', 'prec1', 'rec0', 'rec1', 'f1sc0', 'f1sc1', 'sup0', 'sup1']
-    results = pd.Series([model_name, test_loss, test_acc, test_precision[0], test_precision[1], test_recall[0], test_recall[1],
+    LABELS = ['model_name', 'note', 'loss', 'acc', 'prec0', 'prec1', 'rec0', 'rec1', 'f1sc0', 'f1sc1', 'sup0', 'sup1']
+    results = pd.Series([model_name, note, test_loss, test_acc, test_precision[0], test_precision[1], test_recall[0], test_recall[1],
                         test_fscore[0], test_fscore[1], test_support[0], test_support[1]])
-    results.index = labels
+    results.index = LABELS
     return results
 
 def eval_forest_model(model: RandomForestClassifier, X_test: pd.DataFrame, y_test: list, criterion: torch.nn, note=None):
 
     model_name = type(model).__name__
-    if note:
-        model_name += ": "+note
     
     y_pred = model.predict(X_test)
 
@@ -76,8 +74,77 @@ def eval_forest_model(model: RandomForestClassifier, X_test: pd.DataFrame, y_tes
                                                     y_pred = torch.tensor(y_pred),
                                                     zero_division=np.nan)
     
-    labels = ['model_name', 'loss', 'acc', 'prec0', 'prec1', 'rec0', 'rec1', 'f1sc0', 'f1sc1', 'sup0', 'sup1']
-    results = pd.Series([model_name, test_loss, test_acc, test_precision[0], test_precision[1], test_recall[0], test_recall[1],
+    LABELS = ['model_name', 'note', 'loss', 'acc', 'prec0', 'prec1', 'rec0', 'rec1', 'f1sc0', 'f1sc1', 'sup0', 'sup1']
+    results = pd.Series([model_name, note, test_loss, test_acc, test_precision[0], test_precision[1], test_recall[0], test_recall[1],
                         test_fscore[0], test_fscore[1], test_support[0], test_support[1]])
-    results.index = labels
+    results.index = LABELS
     return results
+
+def append_weighted_average(metrics_df: pd.DataFrame):
+    '''
+    Calculates weighted averages across the folds based on the 
+    number of samples of the metrics' respective classes.
+
+    Args:
+        metrics_df: a dataframe containing the fold metrics
+    
+    Returns:
+        the modified dataframe with the new weighted average row
+    '''
+    metrics_df = metrics_df.copy()
+    metric_names = list(metrics_df.columns[2:-2])
+    SUP0 = 'sup0'
+    SUP1 = 'sup1'
+
+    # compute weighted averages
+
+    weighted_avg_metrics = [metrics_df.loc[0,'model_name'], "wt_avg"]
+    for metric_name in metric_names:
+
+        # set unweighted metric values (ie loss, accuracy)
+
+        sample_count = len(metrics_df)
+        weighted_metrics = metrics_df[metric_name]
+
+        # apply weights to base values if applicable
+
+        if metric_name[-1] == "0":
+            weighted_metrics = metrics_df[metric_name] * metrics_df[SUP0]
+            sample_count = metrics_df[SUP0].sum()
+        elif metric_name[-1] == "1":
+            weighted_metrics = metrics_df[metric_name] * metrics_df[SUP1]
+            sample_count = metrics_df[SUP1].sum()
+
+        # calculate average
+
+        weighted_avg = weighted_metrics.sum() / sample_count
+        weighted_avg_metrics.append(weighted_avg)
+    
+    # create and append row to dataframe
+
+    LABELS = ['model_name', 'note', 'loss', 'acc', 'prec0', 'prec1', 'rec0', 'rec1', 'f1sc0', 'f1sc1']
+    weighted_avgs = pd.Series(weighted_avg_metrics).to_frame().transpose()
+    weighted_avgs.columns = LABELS
+    metrics_df = pd.concat([metrics_df, weighted_avgs], axis=0, ignore_index=True)
+
+    return metrics_df
+
+def create_metrics_table(metric_dataframes: list):
+    '''
+    Averages the class specific metrics for each model type, and aggregates
+    all the final metrics in a single dataframe.
+
+    Args:
+        metric_dataframes: a list containing all the individual metric dataframes.
+
+    Returns:
+        a dataframe containing the final metrics for each model
+    '''
+    metrics = pd.concat(metric_dataframes, axis=0)
+    metrics = metrics[metrics['note'] == "wt_avg"]
+
+    new_metrics = metrics[['model_name', 'loss', 'acc']].copy()
+    new_metrics['prec'] = (metrics.loc[:,'prec0'] + metrics.loc[:,'prec1']) / 2
+    new_metrics['rec'] = (metrics.loc[:,'rec0'] + metrics.loc[:,'rec1']) / 2
+    new_metrics['f1sc'] = (metrics.loc[:,'f1sc0'] + metrics.loc[:,'f1sc1']) / 2
+    return new_metrics.reset_index(drop=True)

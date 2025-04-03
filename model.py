@@ -81,7 +81,7 @@ class FeatureMLP(nn.Module):
         super().__init__()
         self.linear_1 = nn.Sequential(
             nn.Linear(in_shape, hidden_shape),
-            nn.Dropout(),
+            # nn.Dropout(),
             nn.ReLU(),
         )
         self.linear_2 = nn.Sequential(
@@ -96,7 +96,7 @@ class FeatureMLP(nn.Module):
         #print(x.shape)
         x = self.linear_1(x)
         #print(x.shape)
-        x = self.linear_2(x)
+        # x = self.linear_2(x)
         #print(x.shape)
         x = self.linear_3(x)
         #print(x.shape)
