@@ -1,6 +1,6 @@
-print("--------------------------------------")
-print("DEPRESSION CLASSIFICATION MODEL // V.0")
-print("--------------------------------------")
+print("--------------------------------")
+print("DEPRESSION CLASSIFICATION // V.0")
+print("--------------------------------")
 print("PROCESS: DATA LOADING")
 print("Loading libraries...")
 

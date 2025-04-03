@@ -1,6 +1,6 @@
-print("--------------------------------------")
-print("DEPRESSION CLASSIFICATION MODEL // V.0")
-print("--------------------------------------")
+print("--------------------------------")
+print("DEPRESSION CLASSIFICATION // V.0")
+print("--------------------------------")
 print("PROCESS: TRAINING AND EVALUATION")
 print("Loading libraries...")
 
@@ -96,7 +96,7 @@ print("ZeroR Baseline:")
 
 zeroR_results = []
 for i, (train_dataloader, test_dataloader) in enumerate(tqdm(kf_actigraphy_dataloaders, ncols=50)):
-      model_0R = ZeroR(device)
+      model_0R = ZeroR()
       zeroR_results.append(
             eval_model(model = model_0R,
                        note = f"{i}",
@@ -107,6 +107,36 @@ for i, (train_dataloader, test_dataloader) in enumerate(tqdm(kf_actigraphy_datal
 zeroR_results = pd.concat(zeroR_results, axis=1).transpose()
 zeroR_results = append_weighted_average(zeroR_results)
 zeroR_results.to_csv(os.path.join(RESULTS_DIR, "zeroR.csv"))
+
+#
+# LSTM training
+#
+
+print("LSTM:")
+
+lstm_results = []
+IN_2 = 60
+OUT_2 = 1
+HIDDEN_2 = 16
+LSTM_LAYERS = 1
+for i, (train_dataloader, test_dataloader) in enumerate(tqdm(kf_actigraphy_dataloaders, ncols=50)):
+      # reset model
+      model_2 = LSTM(IN_2, OUT_2, HIDDEN_2, LSTM_LAYERS).to(device)
+      
+      optimizer = torch.optim.RMSprop(params = model_2.parameters(), lr=0.0005)
+      # train model
+      train_test(model_2, train_dataloader, test_dataloader, epochs = 10, optimizer=optimizer, 
+            criterion=criterion, device=device, verbose=True)
+      lstm_results.append(
+            eval_model(model = model_2,
+                       note = f"{i}",
+                       dataloader = test_dataloader,
+                       criterion = criterion,
+                       device = device)
+      )
+lstm_results = pd.concat(lstm_results, axis=1).transpose()
+lstm_results = append_weighted_average(lstm_results)
+lstm_results.to_csv(os.path.join(RESULTS_DIR, "lstm.csv"))
 
 #
 # convNN training
@@ -153,7 +183,7 @@ for i, (train_dataloader, test_dataloader) in enumerate(tqdm(kf_feature_dataload
       optimizer = torch.optim.Adam(params = model_1.parameters(), lr=0.005)
       # train model
       train_test(model_1, train_dataloader, test_dataloader, epochs = 30, optimizer=optimizer, 
-            criterion=criterion, device=device, verbose=True)
+            criterion=criterion, device=device, verbose=False)
       mlp_results.append(
             eval_model(model = model_1,
                        note = f"{i}",
@@ -164,34 +194,6 @@ for i, (train_dataloader, test_dataloader) in enumerate(tqdm(kf_feature_dataload
 mlp_results = pd.concat(mlp_results, axis=1).transpose()
 mlp_results = append_weighted_average(mlp_results)
 mlp_results.to_csv(os.path.join(RESULTS_DIR, "mlp.csv"))
-
-#
-# LSTM training
-#
-
-# lstm_results = []
-# IN_2 = 1
-# OUT_2 = 1
-# HIDDEN_2 = 32
-# LSTM_LAYERS = 720
-# for i, (train_dataloader, test_dataloader) in enumerate(kf_actigraphy_dataloaders):
-#       # reset model
-#       model_2 = LSTM(IN_2, OUT_2, HIDDEN_2, LSTM_LAYERS).to(device)
-      
-#       optimizer = torch.optim.Adam(params = model_0.parameters(), lr=0.001)
-#       # train model
-#       print(f"fold_{i+1}...")
-#       train_test(model_2, train_dataloader, test_dataloader, epochs = 10, optimizer=optimizer, 
-#             criterion=criterion, device=device, verbose=False)
-#       lstm_results.append(
-#             eval_model(model = model_2,
-#                        note = f"{i}",
-#                        dataloader = test_dataloader,
-#                        criterion = criterion,
-#                        device = device)
-#       )
-# lstm_results = pd.concat(lstm_results, axis=1).transpose()
-# lstm_results.to_csv(os.path.join(RESULTS_DIR, "lstm.csv"))
 
 #
 # random forest training
@@ -218,7 +220,7 @@ forest_results.to_csv(os.path.join(RESULTS_DIR, "random_forest.csv"))
 
 print("Aggregating metrics...")
 
-metrics = create_metrics_table([zeroR_results, cnn_results, mlp_results, forest_results])
+metrics = create_metrics_table([zeroR_results, cnn_results, mlp_results, forest_results, lstm_results])
 metrics.to_csv(os.path.join(RESULTS_DIR, "results.csv"))
 print(metrics)
 

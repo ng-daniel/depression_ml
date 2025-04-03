@@ -12,36 +12,35 @@ class LSTM(nn.Module):
         # N * 1 * L * in_shape
         self.norm = nn.BatchNorm2d(num_features=1)
         # hidden shape = number of Long term memory values
-        self.lstm = nn.LSTM(in_shape, hidden_shape, lstm_layers)
+        self.lstm = nn.LSTM(in_shape, hidden_shape, lstm_layers, batch_first=True)
         self.fc = nn.Sequential(
             # nn.Linear(hidden_shape, hidden_shape),
             # nn.ReLU(),
             nn.Linear(hidden_shape, out_shape)
         )
-    def forward(self, x, h0, c0):
+    def forward(self, x):
         # number of LSTM layers * L * hidden shape
-        if h0 is None or c0 is None:
-            h0 = torch.zeros(self.lstm_layers, 
-                                    x.size(2), 
-                                    self.hidden_shape).to(x.device)
-            c0 = torch.zeros(self.lstm_layers, 
-                                    x.size(2), 
-                                    self.hidden_shape).to(x.device)
+        h0 = torch.zeros(self.lstm_layers, 
+                         x.size(0), 
+                         self.hidden_shape).to(x.device)
+        c0 = torch.zeros(self.lstm_layers, 
+                         x.size(0), 
+                         self.hidden_shape).to(x.device)
         # print(x.shape)
-        x = x.squeeze(dim=1)
+        x = x.squeeze(dim=1).unsqueeze(dim=2)
+        x = torch.reshape(x, (x.size(0), int(x.size(1) / self.in_shape), self.in_shape))
         # print(x.shape)
         x, (hn, cn) = self.lstm(x, (h0, c0))
         # print(f"{x.shape} | {hn.shape} | {cn.shape}")
         x = self.fc(x[:, -1, :])
         # print(x.shape)
-        return x, (hn, cn)
+        return x
 
 class ZeroR(nn.Module):
-    def __init__(self, device):
+    def __init__(self):
         super().__init__()
-        self.device = device
     def forward(self, x):
-        return torch.zeros(len(x)).unsqueeze(1).to(self.device)
+        return torch.zeros(len(x)).unsqueeze(1).to(x.device)
 
 class ConvNN(nn.Module):
     def __init__(self, in_shape, output_dim, hidden_shape, flatten_factor):

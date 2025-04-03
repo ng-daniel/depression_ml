@@ -147,4 +147,4 @@ def create_metrics_table(metric_dataframes: list):
     new_metrics['prec'] = (metrics.loc[:,'prec0'] + metrics.loc[:,'prec1']) / 2
     new_metrics['rec'] = (metrics.loc[:,'rec0'] + metrics.loc[:,'rec1']) / 2
     new_metrics['f1sc'] = (metrics.loc[:,'f1sc0'] + metrics.loc[:,'f1sc1']) / 2
-    return new_metrics.reset_index(drop=True)
+    return new_metrics.reset_index(drop=True).sort_values('acc', ascending=False)
