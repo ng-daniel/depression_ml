@@ -1,4 +1,5 @@
 import os
+import shutil
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -172,6 +173,11 @@ def extract_stats_from_window(data: pd.Series):
     labels.extend(['mean', 'std', 'skew', 'kurt', 'max', 'min'])
     stats.extend([data.mean(), data.std(), data.skew(), data.kurt(), data.max(), data.min()])
     
+    # calculating percent active
+    active_percentage = len(data[data > 0.5]) / len(data)
+    labels.extend(['active_p'])
+    stats.extend([active_percentage])
+
     # calculating half window statistics
     h_win = [data.iloc[0:len(data)//2], data.iloc[len(data)//2:]]
     labels.extend(['h_mean_change', 'h_max_change', 'h_min_change'])
@@ -241,3 +247,45 @@ def create_feature_dataframe(data: pd.DataFrame, raw_data: pd.DataFrame):
     features =  extracted_stats
     features.index = data.index
     return features
+
+def extract_feature_series(data: pd.Series):
+    '''
+    Transforms a series of raw actigraphy data into a dataframe
+    containing feature data across 24 hours using a sliding window
+    approach for increasing increments of 30 minutes.
+    '''
+    features_by_window = []
+    for i in range(0, len(data), 30):
+        window = data[i:i+30]
+        features_by_window.append(extract_stats_from_window(window))
+    return pd.concat(features_by_window, axis=1).transpose()
+
+def load_feature_series_data(data: pd.DataFrame, dir: str):
+    for i in range(len(data)):
+        feature_series = extract_feature_series(data.iloc[i])
+        feature_series.to_csv(os.path.join(dir, f"{data.index[i]}.csv"))
+
+def empty_dataframe_directory(dir_name: str):
+    '''
+    Clears a data directory, treating "processed_dataframes" as the root path.
+    '''
+    assert(len(dir_name) > 0)
+
+    # remove entire directory and replace it with an empty one of the same name
+    
+    directory = os.path.join("data/processed_dataframes", dir_name)
+    shutil.rmtree(directory)
+    os.mkdir(directory)
+
+def reset_feature_series(num_folds: int):
+    '''
+    Clears and resets the feature series data folder
+    with the appropriate number of folds.
+    '''
+    empty_dataframe_directory("feature_series")
+    directory = "data/processed_dataframes/feature_series"
+    for i in range(num_folds):
+        fold_dir = os.path.join(directory, str(i))
+        os.mkdir(fold_dir)
+        os.mkdir(os.path.join(fold_dir, "train"))
+        os.mkdir(os.path.join(fold_dir, "test"))
