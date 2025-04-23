@@ -100,3 +100,35 @@ class FeatureMLP(nn.Module):
         x = self.linear_3(x)
         #print(x.shape)
         return x
+
+class LSTM_Feature(nn.Module):
+    def __init__(self, in_shape, out_shape, hidden_shape, lstm_layers):
+        super().__init__()
+        self.in_shape = in_shape
+        self.out_shape = out_shape
+        self.hidden_shape = hidden_shape
+        self.lstm_layers = lstm_layers
+        
+        # N * 1 * L * in_shape
+        self.norm = nn.BatchNorm2d(num_features=1)
+        # hidden shape = number of Long term memory values
+        self.lstm = nn.LSTM(in_shape, hidden_shape, lstm_layers, batch_first=True)
+        self.fc = nn.Sequential(
+            # nn.Linear(hidden_shape, hidden_shape),
+            # nn.ReLU(),
+            nn.Linear(hidden_shape, out_shape)
+        )
+    def forward(self, x):
+        # number of LSTM layers * L * hidden shape
+        h0 = torch.zeros(self.lstm_layers, 
+                         x.size(0), 
+                         self.hidden_shape).to(x.device)
+        c0 = torch.zeros(self.lstm_layers, 
+                         x.size(0), 
+                         self.hidden_shape).to(x.device)
+        # print(x.shape)
+        x, _ = self.lstm(x, (h0, c0))
+        # print(f"{x.shape} | {hn.shape} | {cn.shape}")
+        x = self.fc(x[:, -1, :])
+        # print(x.shape)
+        return x

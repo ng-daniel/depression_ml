@@ -15,7 +15,7 @@ from sklearn.ensemble import RandomForestClassifier
 from data import create_dataloaders
 from engine import train_test
 from eval import eval_model, eval_forest_model, append_weighted_average, create_metrics_table
-from model import ZeroR, ConvNN, LSTM, FeatureMLP
+from model import ZeroR, ConvNN, LSTM, FeatureMLP, LSTM_Feature
 
 # set device
 
@@ -81,6 +81,47 @@ for i in range(int(num_f / 2)):
             create_dataloaders(X_train, X_test, y_train, y_test, shuffle=True, batch_size=32)
       )
 
+kf_series_tensors = []
+kf_series_dataloaders = []
+FS_DIR = "data/processed_dataframes/feature_series"
+for i in range(len(os.listdir(FS_DIR))):
+      
+      # test data csv loading + to tensor
+
+      test_tensors = []
+      test_labels = []
+      test_directory = os.path.join(FS_DIR, str(i), "test")
+      for file_name in os.listdir(test_directory):
+            df = pd.read_csv(os.path.join(test_directory, file_name))
+            test_tensor = torch.tensor(df.to_numpy())
+            test_label = int(file_name[0])
+            test_tensors.append(test_tensor)
+
+      # train data csv loading + to tensor
+
+      train_tensors = []
+      train_labels = []
+      train_directory = os.path.join(FS_DIR, str(i), "train")
+      for file_name in os.listdir(train_directory):
+            df = pd.read_csv(os.path.join(train_directory, file_name))
+            train_tensor = torch.tensor(df.to_numpy())
+            train_label = int(file_name[0])
+            train_tensors.append(train_tensor)
+
+      # convert train and test tensors into single 3D tensors
+
+      test_tensor = torch.stack(test_tensors, dim = 0)
+      train_tensor = torch.stack(train_tensors, dim = 0)
+      test_labels = torch.tensor(test_labels)
+      train_labels = torch.tensor(train_labels)
+
+      # create and store raw tensors + dataloaders
+
+      kf_series_tensors.append((train_tensors, test_tensor, train_labels, test_label))
+      kf_series_dataloaders.append(
+            create_dataloaders(X_train, X_test, y_train, y_test, shuffle=True, batch_size=32)
+      )
+
 print("Training models...")
 
 RESULTS_DIR = "results"
@@ -123,10 +164,10 @@ for i, (train_dataloader, test_dataloader) in enumerate(tqdm(kf_actigraphy_datal
       # reset model
       model_2 = LSTM(IN_2, OUT_2, HIDDEN_2, LSTM_LAYERS).to(device)
       
-      optimizer = torch.optim.RMSprop(params = model_2.parameters(), lr=0.0005)
+      optimizer = torch.optim.Adam(params = model_2.parameters(), lr=0.005)
       # train model
       train_test(model_2, train_dataloader, test_dataloader, epochs = 10, optimizer=optimizer, 
-            criterion=criterion, device=device, verbose=True)
+            criterion=criterion, device=device, verbose=False)
       lstm_results.append(
             eval_model(model = model_2,
                        note = f"{i}",
@@ -218,9 +259,38 @@ forest_results = pd.concat(forest_results, axis=1).transpose()
 forest_results = append_weighted_average(forest_results)
 forest_results.to_csv(os.path.join(RESULTS_DIR, "random_forest.csv"))
 
+#
+# LSTM Feature training
+#
+
+print("LSTM Feature Series:")
+
+lstm_series_results = []
+IN_3 = len(kf_feature_dfs[0][0].columns)
+OUT_3 = 1
+HIDDEN_3 = 16
+LSTM_LAYERS = 4
+for i, (train_dataloader, test_dataloader) in enumerate(tqdm(kf_series_dataloaders, ncols=50)):
+      # reset model
+      model_3 = LSTM_Feature(IN_3, OUT_3, HIDDEN_3, LSTM_LAYERS).to(device)
+      optimizer = torch.optim.Adam(params = model_3.parameters(), lr=0.005)
+      # train model
+      train_test(model_3, train_dataloader, test_dataloader, epochs = 9, optimizer=optimizer, 
+            criterion=criterion, device=device, verbose=True)
+      lstm_series_results.append(
+            eval_model(model = model_3,
+                       note = f"{i}",
+                       dataloader = test_dataloader,
+                       criterion = criterion,
+                       device = device)
+      )
+lstm_series_results = pd.concat(lstm_series_results, axis=1).transpose()
+lstm_series_results = append_weighted_average(lstm_series_results)
+lstm_series_results.to_csv(os.path.join(RESULTS_DIR, "lstm_series.csv"))
+
 print("Aggregating metrics...")
 
-metrics = create_metrics_table([zeroR_results, cnn_results, mlp_results, forest_results, lstm_results])
+metrics = create_metrics_table([zeroR_results, cnn_results, mlp_results, forest_results, lstm_results, lstm_series_results])
 metrics.to_csv(os.path.join(RESULTS_DIR, "results.csv"))
 print(metrics)
 

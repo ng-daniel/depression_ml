@@ -19,21 +19,13 @@ scores = pd.read_csv("data/scores.csv", index_col='number')
 
 class ActigraphDataset(Dataset):
     def __init__(self, X, y):
-        self.X = torch.from_numpy(X).float().unsqueeze(dim=1)
-        self.y = torch.tensor(y).float()
+        self.X = X
+        self.y = y
     def __len__(self):
         return len(self.y)
     def __getitem__(self, index):
         X = self.X[index]
         y = self.y[index]
-        # code for reshaping 1d tensor to 2d with padding
-        '''
-        new_shape = math.ceil(X.shape[0] / INPUT_SIZE)
-        padding = new_shape * INPUT_SIZE - X.shape[0]
-        p = nn.ZeroPad1d((0,padding))
-        X = p(X)
-        X = X.reshape((new_shape, INPUT_SIZE))
-        '''
         return X, y
 
 def load_data_from_folder(dir_name: str, class_type: str, class_label: int, output_df: pd.DataFrame, scores_df: pd.DataFrame, start_time: str = None):
@@ -144,9 +136,17 @@ def load_dataframes_from_folders():
 
 def create_dataloaders(X_train: pd.DataFrame, X_test: pd.DataFrame, y_train: list, y_test: list,
                          shuffle: bool, batch_size: int):
+    
+    # convert data to tensors
+    if (type(X_train) == pd.DataFrame):
+        X_train = torch.from_numpy(X_train.to_numpy()).float().unsqueeze(dim=1)
+        X_test = torch.from_numpy(X_test.to_numpy()).float().unsqueeze(dim=1)    
+        y_train = torch.tensor(y_train).float()
+        y_test = torch.tensor(y_test).float()
+
     # wrap in pytorch dataloader
-    train_dataset = ActigraphDataset(X_train.to_numpy(), y_train)
-    test_dataset = ActigraphDataset(X_test.to_numpy(), y_test)
+    train_dataset = ActigraphDataset(X_train, y_train)
+    test_dataset = ActigraphDataset(X_test, y_test)
     train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=shuffle)
     test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=shuffle)
 
@@ -173,11 +173,6 @@ def extract_stats_from_window(data: pd.Series):
     labels.extend(['mean', 'std', 'skew', 'kurt', 'max', 'min'])
     stats.extend([data.mean(), data.std(), data.skew(), data.kurt(), data.max(), data.min()])
     
-    # calculating percent active
-    active_percentage = len(data[data > 0.5]) / len(data)
-    labels.extend(['active_p'])
-    stats.extend([active_percentage])
-
     # calculating half window statistics
     h_win = [data.iloc[0:len(data)//2], data.iloc[len(data)//2:]]
     labels.extend(['h_mean_change', 'h_max_change', 'h_min_change'])
