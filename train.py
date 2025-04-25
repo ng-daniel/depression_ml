@@ -84,29 +84,34 @@ for i in range(int(num_f / 2)):
 kf_series_tensors = []
 kf_series_dataloaders = []
 FS_DIR = "data/processed_dataframes/feature_series"
-for i in range(len(os.listdir(FS_DIR))):
+num_fs = len(os.listdir(os.path.join(FS_DIR, "kfolds")))
+print(num_fs)
+print(int(num_fs / 2))
+for i in range(int(num_fs / 2)):
       
       # test data csv loading + to tensor
 
       test_tensors = []
       test_labels = []
-      test_directory = os.path.join(FS_DIR, str(i), "test")
-      for file_name in os.listdir(test_directory):
-            df = pd.read_csv(os.path.join(test_directory, file_name))
-            test_tensor = torch.tensor(df.to_numpy())
-            test_label = int(file_name[0])
-            test_tensors.append(test_tensor)
+      test_directory = os.path.join(FS_DIR, "kfolds", f"fs{i}e.txt")
+      with open(test_directory, "r") as file:
+            for sample_name in file:
+                  df = pd.read_csv(os.path.join(FS_DIR, "csv_files", sample_name.strip() + ".csv"))
+                  test_tensor = torch.tensor(df.to_numpy())
+                  test_label = int(sample_name[0])
+                  test_tensors.append(test_tensor)
 
       # train data csv loading + to tensor
 
       train_tensors = []
       train_labels = []
-      train_directory = os.path.join(FS_DIR, str(i), "train")
-      for file_name in os.listdir(train_directory):
-            df = pd.read_csv(os.path.join(train_directory, file_name))
-            train_tensor = torch.tensor(df.to_numpy())
-            train_label = int(file_name[0])
-            train_tensors.append(train_tensor)
+      train_directory = os.path.join(FS_DIR, "kfolds", f"fs{i}t.txt")
+      with open(train_directory, "r") as file:
+            for sample_name in file:
+                  df = pd.read_csv(os.path.join(FS_DIR, "csv_files", sample_name.strip() + ".csv"))
+                  train_tensor = torch.tensor(df.to_numpy())
+                  train_label = int(sample_name[0])
+                  train_tensors.append(train_tensor)
 
       # convert train and test tensors into single 3D tensors
 
@@ -275,7 +280,7 @@ for i, (train_dataloader, test_dataloader) in enumerate(tqdm(kf_series_dataloade
       model_3 = LSTM_Feature(IN_3, OUT_3, HIDDEN_3, LSTM_LAYERS).to(device)
       optimizer = torch.optim.Adam(params = model_3.parameters(), lr=0.005)
       # train model
-      train_test(model_3, train_dataloader, test_dataloader, epochs = 9, optimizer=optimizer, 
+      train_test(model_3, train_dataloader, test_dataloader, epochs = 10, optimizer=optimizer, 
             criterion=criterion, device=device, verbose=True)
       lstm_series_results.append(
             eval_model(model = model_3,

@@ -36,14 +36,26 @@ for i in tqdm(range(NUM_FOLDS), ncols=50, leave=True):
     X_test_features = create_feature_dataframe(data = X_test_p, raw_data = X_test)
     kf_feature_dfs.append((X_train_features, X_test_features, y_train, y_test))
 
-print(f"Loading feature series csv files...")
+print(f"Loading feature series csv files and sample names...")
 
 # feature series data
 EXPORT_DIR_FEATURE_SERIES = Path("data/processed_dataframes/feature_series")
-reset_feature_series(NUM_FOLDS)
+load_feature_series_data(actigraph_data, EXPORT_DIR_FEATURE_SERIES.joinpath("csv_files"))
 for i, (X_train, X_test, y_train, y_test) in enumerate(tqdm(kf_actigraphy_dfs, ncols=50, leave=True)):
-    load_feature_series_data(X_test, EXPORT_DIR_FEATURE_SERIES.joinpath(f"{str(i)}", "test"))
-    load_feature_series_data(X_train, EXPORT_DIR_FEATURE_SERIES.joinpath(f"{str(i)}", "train"))
+    
+    # extract sample names from compacted dataframe
+    train_names = list(X_train.index)
+    test_names = list(X_test.index)
+    train_filename = f"fs{i}t.txt"
+    test_filename = f"fs{i}e.txt"
+
+    # write names to files in the kfolds folder
+    with open(EXPORT_DIR_FEATURE_SERIES.joinpath("kfolds", train_filename), "w") as file:
+        for name in train_names:
+            file.write(name + "\n")
+    with open(EXPORT_DIR_FEATURE_SERIES.joinpath("kfolds", test_filename), "w") as file:
+        for name in test_names:
+            file.write(name + "\n")
 
 print(f"Writing csv files to: {EXPORT_DIR}...")
 
