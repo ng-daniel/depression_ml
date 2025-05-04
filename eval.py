@@ -61,13 +61,18 @@ def eval_model(model: torch.nn, dataloader: DataLoader, criterion: torch.nn, dev
     results.index = LABELS
     return results
 
-def eval_forest_model(model: RandomForestClassifier, X_test: pd.DataFrame, y_test: list, criterion: torch.nn, note=None):
+def eval_forest_model(model: RandomForestClassifier, X_test: pd.DataFrame, y_test: list, criterion: torch.nn, device : str = None, note=None):
 
     model_name = type(model).__name__
     
     y_pred = model.predict(X_test)
+    y_pred_tensor = torch.tensor(y_pred).float()
+    y_test_tensor = torch.tensor(y_test).float()
+    if device:
+        y_pred_tensor = y_pred_tensor.to(device)
+        y_test_tensor = y_test_tensor.to(device)
 
-    test_loss = criterion(torch.tensor(y_pred).float(), torch.tensor(y_test).float()).item()
+    test_loss = criterion(y_pred_tensor, y_test_tensor).item()
     test_acc = (y_pred == y_test).sum() / len(y_test)
     test_precision, test_recall, test_fscore, test_support = precision_recall_fscore_support(
                                                     y_true = torch.tensor(y_test),

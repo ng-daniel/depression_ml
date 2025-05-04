@@ -220,8 +220,10 @@ def extract_fft_from_window(data: pd.Series):
     
     # loading values into a series with descriptive index
     
-    fft_col_names = [f'fft_{i+1}' for i in range(len(ft_abs_scaled))] + [f'fft_top_{i+1}' for i in range(len(top_fourier))]
-    fft_features = list(ft_abs_scaled) + top_fourier
+    #fft_col_names = [f'fft_{i+1}' for i in range(len(ft_abs_scaled))] + [f'fft_top_{i+1}' for i in range(len(top_fourier))]
+    fft_col_names = [f'fft_top_{i+1}' for i in range(len(top_fourier))]
+    #fft_features = list(ft_abs_scaled) + top_fourier
+    fft_features = top_fourier
     fft_data = pd.Series(fft_features, index = fft_col_names)
     return fft_data
 
@@ -237,8 +239,8 @@ def create_feature_dataframe(data: pd.DataFrame, raw_data: pd.DataFrame):
     #     feature_rows.append(feature_row)
 
     extracted_stats = data.apply(extract_stats_from_window, axis=1).reset_index(drop=True)
-    # extracted_fft = raw_data.apply(extract_fft_from_window, axis=1).reset_index(drop=True)
-    # features = pd.concat([extracted_stats, extracted_fft], axis=1)
+    #extracted_fft = raw_data.apply(extract_fft_from_window, axis=1).reset_index(drop=True)
+    #features = pd.concat([extracted_stats, extracted_fft], axis=1)
     features =  extracted_stats
     features.index = data.index
     return features

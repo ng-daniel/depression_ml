@@ -85,8 +85,6 @@ kf_series_tensors = []
 kf_series_dataloaders = []
 FS_DIR = "data/processed_dataframes/feature_series"
 num_fs = len(os.listdir(os.path.join(FS_DIR, "kfolds")))
-print(num_fs)
-print(int(num_fs / 2))
 for i in range(int(num_fs / 2)):
       
       # test data csv loading + to tensor
@@ -124,7 +122,7 @@ for i in range(int(num_fs / 2)):
 
       kf_series_tensors.append((train_tensors, test_tensor, train_labels, test_label))
       kf_series_dataloaders.append(
-            create_dataloaders(X_train, X_test, y_train, y_test, shuffle=True, batch_size=32)
+            create_dataloaders(X_train, X_test, y_train, y_test, shuffle=True, batch_size=64)
       )
 
 print("Training models...")
@@ -132,7 +130,8 @@ print("Training models...")
 RESULTS_DIR = "results"
 
 # define criterion
-criterion = nn.BCEWithLogitsLoss().to(device)
+class_weights = torch.tensor([1.1]).to(device)
+criterion = nn.BCEWithLogitsLoss(pos_weight=class_weights).to(device)
 
 #
 # zeroR baseline
@@ -172,7 +171,7 @@ for i, (train_dataloader, test_dataloader) in enumerate(tqdm(kf_actigraphy_datal
       optimizer = torch.optim.Adam(params = model_2.parameters(), lr=0.005)
       # train model
       train_test(model_2, train_dataloader, test_dataloader, epochs = 10, optimizer=optimizer, 
-            criterion=criterion, device=device, verbose=False)
+            criterion=criterion, device=device, verbose=True)
       lstm_results.append(
             eval_model(model = model_2,
                        note = f"{i}",
@@ -258,7 +257,8 @@ for i, (X_train, X_test, y_train, y_test) in enumerate(tqdm(kf_feature_dfs, ncol
                               note = f"{i}",
                               X_test=X_test,
                               y_test=y_test,
-                              criterion = criterion)
+                              criterion = criterion,
+                              device = device)
       )
 forest_results = pd.concat(forest_results, axis=1).transpose()
 forest_results = append_weighted_average(forest_results)
@@ -274,13 +274,13 @@ lstm_series_results = []
 IN_3 = len(kf_feature_dfs[0][0].columns)
 OUT_3 = 1
 HIDDEN_3 = 16
-LSTM_LAYERS = 4
+LSTM_LAYERS = 8
 for i, (train_dataloader, test_dataloader) in enumerate(tqdm(kf_series_dataloaders, ncols=50)):
       # reset model
       model_3 = LSTM_Feature(IN_3, OUT_3, HIDDEN_3, LSTM_LAYERS).to(device)
-      optimizer = torch.optim.Adam(params = model_3.parameters(), lr=0.005)
+      optimizer = torch.optim.Adam(params = model_3.parameters(), lr=0.00025)
       # train model
-      train_test(model_3, train_dataloader, test_dataloader, epochs = 10, optimizer=optimizer, 
+      train_test(model_3, train_dataloader, test_dataloader, epochs = 200, optimizer=optimizer, 
             criterion=criterion, device=device, verbose=True)
       lstm_series_results.append(
             eval_model(model = model_3,
