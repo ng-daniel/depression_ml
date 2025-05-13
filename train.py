@@ -10,11 +10,14 @@ import pandas as pd
 import torch
 import torch.nn as nn
 from tqdm import tqdm
+from sklearn.calibration import CalibratedClassifierCV
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.svm import SVC
+from sklearn.tree import DecisionTreeClassifier
 
 from data import create_dataloaders
 from engine import train_test
-from eval import eval_model, eval_forest_model, append_weighted_average, create_metrics_table
+from eval import eval_model, eval_sklearn_model, append_weighted_average, create_metrics_table
 from model import ZeroR, ConvNN, LSTM, FeatureMLP, LSTM_Feature
 
 # set device
@@ -130,8 +133,87 @@ print("Training models...")
 RESULTS_DIR = "results"
 
 # define criterion
-class_weights = torch.tensor([1.1]).to(device)
+class_weights = torch.tensor([1]).to(device)
+class_weights_dict = {
+      0 : 1,
+      1 : class_weights.item()
+}
 criterion = nn.BCEWithLogitsLoss(pos_weight=class_weights).to(device)
+
+#
+# linear svm training
+#
+
+print("Linear SVC:")
+
+linear_svc_results = []
+for i, (X_train, X_test, y_train, y_test) in enumerate(tqdm(kf_feature_dfs, ncols=50)):
+      # reset model
+      model = SVC(kernel='linear', probability=True, class_weight=class_weights_dict)
+      # train model
+      model.fit(X_train, y_train)
+      linear_svc_results.append(
+            eval_sklearn_model(model = model,
+                              note = f"{i}",
+                              X_test=X_test,
+                              y_test=y_test,
+                              criterion = criterion,
+                              device = device)
+      )
+linear_svc_results = pd.concat(linear_svc_results, axis=1).transpose()
+linear_svc_results = append_weighted_average(linear_svc_results)
+linear_svc_results.to_csv(os.path.join(RESULTS_DIR, "linear_svc.csv"))
+
+print(linear_svc_results)
+
+print("Decision Tree:")
+
+decision_tree_results = []
+for i, (X_train, X_test, y_train, y_test) in enumerate(tqdm(kf_feature_dfs, ncols=50)):
+      # reset model
+      model = DecisionTreeClassifier()
+      # train model
+      model.fit(X_train, y_train)
+      decision_tree_results.append(
+            eval_sklearn_model(model = model,
+                              note = f"{i}",
+                              X_test=X_test,
+                              y_test=y_test,
+                              criterion = criterion,
+                              device = device)
+      )
+decision_tree_results = pd.concat(decision_tree_results, axis=1).transpose()
+decision_tree_results = append_weighted_average(decision_tree_results)
+decision_tree_results.to_csv(os.path.join(RESULTS_DIR, "decision_tree.csv"))
+
+print(decision_tree_results)
+
+#
+# random forest training
+#
+
+print("Extracted Features Random Forest:")
+
+forest_results = []
+N_ESTIMATORS = 300
+for i, (X_train, X_test, y_train, y_test) in enumerate(tqdm(kf_feature_dfs, ncols=50)):
+      # reset model
+      model_2 = RandomForestClassifier(n_estimators=N_ESTIMATORS)
+      # train model
+      model_2.fit(X_train, y_train)
+      forest_results.append(
+            eval_sklearn_model(model = model_2,
+                              note = f"{i}",
+                              X_test=X_test,
+                              y_test=y_test,
+                              criterion = criterion,
+                              device = device)
+      )
+forest_results = pd.concat(forest_results, axis=1).transpose()
+forest_results = append_weighted_average(forest_results)
+forest_results.to_csv(os.path.join(RESULTS_DIR, "random_forest.csv"))
+
+print(forest_results)
 
 #
 # zeroR baseline
@@ -241,30 +323,6 @@ mlp_results = append_weighted_average(mlp_results)
 mlp_results.to_csv(os.path.join(RESULTS_DIR, "mlp.csv"))
 
 #
-# random forest training
-#
-
-print("Extracted Features Random Forest:")
-
-forest_results = []
-for i, (X_train, X_test, y_train, y_test) in enumerate(tqdm(kf_feature_dfs, ncols=50)):
-      # reset model
-      model_2 = RandomForestClassifier()
-      # train model
-      model_2.fit(X_train, y_train)
-      forest_results.append(
-            eval_forest_model(model = model_2,
-                              note = f"{i}",
-                              X_test=X_test,
-                              y_test=y_test,
-                              criterion = criterion,
-                              device = device)
-      )
-forest_results = pd.concat(forest_results, axis=1).transpose()
-forest_results = append_weighted_average(forest_results)
-forest_results.to_csv(os.path.join(RESULTS_DIR, "random_forest.csv"))
-
-#
 # LSTM Feature training
 #
 
@@ -278,7 +336,7 @@ LSTM_LAYERS = 8
 for i, (train_dataloader, test_dataloader) in enumerate(tqdm(kf_series_dataloaders, ncols=50)):
       # reset model
       model_3 = LSTM_Feature(IN_3, OUT_3, HIDDEN_3, LSTM_LAYERS).to(device)
-      optimizer = torch.optim.Adam(params = model_3.parameters(), lr=0.00025)
+      optimizer = torch.optim.Adam(params = model_3.parameters(), lr=0.0005)
       # train model
       train_test(model_3, train_dataloader, test_dataloader, epochs = 200, optimizer=optimizer, 
             criterion=criterion, device=device, verbose=True)
@@ -293,9 +351,12 @@ lstm_series_results = pd.concat(lstm_series_results, axis=1).transpose()
 lstm_series_results = append_weighted_average(lstm_series_results)
 lstm_series_results.to_csv(os.path.join(RESULTS_DIR, "lstm_series.csv"))
 
+
+
 print("Aggregating metrics...")
 
-metrics = create_metrics_table([zeroR_results, cnn_results, mlp_results, forest_results, lstm_results, lstm_series_results])
+metrics = create_metrics_table([zeroR_results, cnn_results, mlp_results, forest_results, lstm_results, 
+                              lstm_series_results, linear_svc_results, decision_tree_results])
 metrics.to_csv(os.path.join(RESULTS_DIR, "results.csv"))
 print(metrics)
 
