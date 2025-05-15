@@ -94,12 +94,12 @@ def load_dataframe_labels(dir_names: list, class_names: list, time: str = None, 
     labels = data.index.map(lambda x: int(x[0]))
     return data, labels
 
-def kfolds_dataframes(data: pd.DataFrame, labels: list, numfolds: int, shuffle: bool, random_state: int, batch_size: int):
+def kfolds_dataframes(data: pd.DataFrame, labels: list, numfolds: int, shuffle: bool, batch_size: int, random_state: int = None):
     # apply log function to all values
     data = data.map(lambda x: log_skip_zeroes(x))
     
     if shuffle:
-        kf = KFold(n_splits=numfolds, shuffle=shuffle, random_state=42)
+        kf = KFold(n_splits=numfolds, shuffle=shuffle, random_state=random_state)
     else:
         kf = KFold(n_splits=numfolds, shuffle=shuffle)
     kf.get_n_splits(data)
@@ -259,7 +259,15 @@ def extract_feature_series(data: pd.Series):
 
 def load_feature_series_data(data: pd.DataFrame, dir: str):
     for i in range(len(data)):
-        feature_series = extract_feature_series(data.iloc[i])
+        
+        # preprocess each sample
+        sample = data.iloc[i].copy()
+        # sample = sample.apply(log_skip_zeroes)
+        scaler = MinMaxScaler((0,1))
+        sample = pd.Series(scaler.fit_transform(pd.DataFrame(sample)).squeeze())
+
+        # extract feature series and write to csv
+        feature_series = extract_feature_series(sample)
         feature_series.to_csv(os.path.join(dir, f"{data.index[i]}.csv"))
 
 def empty_dataframe_directory(dir_name: str):

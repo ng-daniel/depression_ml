@@ -5,85 +5,66 @@ print("PROCESS: TRAINING AND EVALUATION")
 print("Loading libraries...")
 
 import os
-
 import pandas as pd
 import torch
 import torch.nn as nn
-from tqdm import tqdm
-from sklearn.calibration import CalibratedClassifierCV
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.svm import SVC
-from sklearn.tree import DecisionTreeClassifier
-
 from data import create_dataloaders
-from engine import train_test
-from eval import eval_model, eval_sklearn_model, append_weighted_average, create_metrics_table
-from model import ZeroR, ConvNN, LSTM, FeatureMLP, LSTM_Feature
-
-# set device
-
+from eval import create_metrics_table
+from training_loops import (run_linear_svc, run_decision_tree, run_cnn, run_lstm, run_lstm_feature, 
+                            run_mlp, run_random_forest, run_zeroR_baseline)
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-print("Loading dataframes from files...")
-
+# read actigraphy data and extracted features data to respective lists from 
+# the appropriate directories and create dataloaders for both types of data
 kf_actigraphy_dfs = []
 kf_feature_dfs = []
-
 kf_actigraphy_dataloaders = []
 kf_feature_dataloaders = []
-
 A_DIR = "data/processed_dataframes/actigraphy"
 num_a = len(os.listdir(A_DIR))
 for i in range(int(num_a / 2)):
       
       # load train data
-
       X_train = pd.read_csv(os.path.join(A_DIR, f"a{i}t.csv"), index_col=0)
       y_train = list(X_train['label'])
       
       # load test data
-
       X_test = pd.read_csv(os.path.join(A_DIR, f"a{i}e.csv"), index_col=0)
       y_test = list(X_test['label'])
 
       # drop label column
-
       X_train.drop('label', axis=1, inplace=True)
       X_test.drop('label', axis=1, inplace=True)
 
       # load dataframes
-
       kf_actigraphy_dfs.append((X_train, X_test, y_train, y_test))
       kf_actigraphy_dataloaders.append(
             create_dataloaders(X_train, X_test, y_train, y_test, shuffle=True, batch_size=32)
       )
-
 F_DIR = "data/processed_dataframes/feature"
 num_f = len(os.listdir(F_DIR))
 for i in range(int(num_f / 2)):
       
       # load train data
-
       X_train = pd.read_csv(os.path.join(F_DIR, f"f{i}t.csv"), index_col=0)
       y_train = list(X_train['label'])
       
       # load test data
-
       X_test = pd.read_csv(os.path.join(F_DIR, f"f{i}e.csv"), index_col=0)
       y_test = list(X_test['label'])
       
       # drop label column
-
       X_train.drop('label', axis=1, inplace=True)
       X_test.drop('label', axis=1, inplace=True)
 
       # load dataframes
-
       kf_feature_dfs.append((X_train, X_test, y_train, y_test))
       kf_feature_dataloaders.append(
             create_dataloaders(X_train, X_test, y_train, y_test, shuffle=True, batch_size=32)
       )
 
+# read feature series data for LSTM v2 into 
+# respective lists and create dataloaders for them
 kf_series_tensors = []
 kf_series_dataloaders = []
 FS_DIR = "data/processed_dataframes/feature_series"
@@ -91,7 +72,6 @@ num_fs = len(os.listdir(os.path.join(FS_DIR, "kfolds")))
 for i in range(int(num_fs / 2)):
       
       # test data csv loading + to tensor
-
       test_tensors = []
       test_labels = []
       test_directory = os.path.join(FS_DIR, "kfolds", f"fs{i}e.txt")
@@ -103,7 +83,6 @@ for i in range(int(num_fs / 2)):
                   test_tensors.append(test_tensor)
 
       # train data csv loading + to tensor
-
       train_tensors = []
       train_labels = []
       train_directory = os.path.join(FS_DIR, "kfolds", f"fs{i}t.txt")
@@ -115,246 +94,114 @@ for i in range(int(num_fs / 2)):
                   train_tensors.append(train_tensor)
 
       # convert train and test tensors into single 3D tensors
-
       test_tensor = torch.stack(test_tensors, dim = 0)
       train_tensor = torch.stack(train_tensors, dim = 0)
       test_labels = torch.tensor(test_labels)
       train_labels = torch.tensor(train_labels)
 
       # create and store raw tensors + dataloaders
-
       kf_series_tensors.append((train_tensors, test_tensor, train_labels, test_label))
       kf_series_dataloaders.append(
             create_dataloaders(X_train, X_test, y_train, y_test, shuffle=True, batch_size=64)
       )
 
-print("Training models...")
 
+# setup output directory, class weights, and loss function, 
+# aka criterion, for model training and evaluation
 RESULTS_DIR = "results"
-
-# define criterion
-class_weights = torch.tensor([1]).to(device)
+class_weights = torch.tensor([1.1]).to(device)
 class_weights_dict = {
       0 : 1,
       1 : class_weights.item()
 }
 criterion = nn.BCEWithLogitsLoss(pos_weight=class_weights).to(device)
+NUM_FEATURES = len(kf_feature_dfs[0][0].columns)
 
-#
-# linear svm training
-#
 
-print("Linear SVC:")
-
-linear_svc_results = []
-for i, (X_train, X_test, y_train, y_test) in enumerate(tqdm(kf_feature_dfs, ncols=50)):
-      # reset model
-      model = SVC(kernel='linear', probability=True, class_weight=class_weights_dict)
-      # train model
-      model.fit(X_train, y_train)
-      linear_svc_results.append(
-            eval_sklearn_model(model = model,
-                              note = f"{i}",
-                              X_test=X_test,
-                              y_test=y_test,
-                              criterion = criterion,
-                              device = device)
-      )
-linear_svc_results = pd.concat(linear_svc_results, axis=1).transpose()
-linear_svc_results = append_weighted_average(linear_svc_results)
+# LINEAR SUPPORT VECTOR MACHINE CLASSIFIER
+linear_svc_results = run_linear_svc(data=kf_feature_dfs, 
+                                    criterion=criterion,
+                                    device=device,
+                                    weights=class_weights_dict)
 linear_svc_results.to_csv(os.path.join(RESULTS_DIR, "linear_svc.csv"))
 
-print(linear_svc_results)
 
-print("Decision Tree:")
-
-decision_tree_results = []
-for i, (X_train, X_test, y_train, y_test) in enumerate(tqdm(kf_feature_dfs, ncols=50)):
-      # reset model
-      model = DecisionTreeClassifier()
-      # train model
-      model.fit(X_train, y_train)
-      decision_tree_results.append(
-            eval_sklearn_model(model = model,
-                              note = f"{i}",
-                              X_test=X_test,
-                              y_test=y_test,
-                              criterion = criterion,
-                              device = device)
-      )
-decision_tree_results = pd.concat(decision_tree_results, axis=1).transpose()
-decision_tree_results = append_weighted_average(decision_tree_results)
+# DECISION TREE
+decision_tree_results = run_decision_tree(data=kf_feature_dfs,
+                                          criterion=criterion,
+                                          device=device,
+                                          weights=class_weights_dict)
 decision_tree_results.to_csv(os.path.join(RESULTS_DIR, "decision_tree.csv"))
 
-print(decision_tree_results)
 
-#
-# random forest training
-#
-
-print("Extracted Features Random Forest:")
-
-forest_results = []
-N_ESTIMATORS = 300
-for i, (X_train, X_test, y_train, y_test) in enumerate(tqdm(kf_feature_dfs, ncols=50)):
-      # reset model
-      model_2 = RandomForestClassifier(n_estimators=N_ESTIMATORS)
-      # train model
-      model_2.fit(X_train, y_train)
-      forest_results.append(
-            eval_sklearn_model(model = model_2,
-                              note = f"{i}",
-                              X_test=X_test,
-                              y_test=y_test,
-                              criterion = criterion,
-                              device = device)
-      )
-forest_results = pd.concat(forest_results, axis=1).transpose()
-forest_results = append_weighted_average(forest_results)
+# RANDOM FOREST
+forest_results = run_random_forest(data=kf_feature_dfs,
+                                   criterion=criterion,
+                                   device=device,
+                                   weights=class_weights_dict,
+                                   n_estimators=300)
 forest_results.to_csv(os.path.join(RESULTS_DIR, "random_forest.csv"))
 
-print(forest_results)
 
-#
-# zeroR baseline
-#
-
-print("ZeroR Baseline:")
-
-zeroR_results = []
-for i, (train_dataloader, test_dataloader) in enumerate(tqdm(kf_actigraphy_dataloaders, ncols=50)):
-      model_0R = ZeroR()
-      zeroR_results.append(
-            eval_model(model = model_0R,
-                       note = f"{i}",
-                       dataloader = test_dataloader,
-                       criterion = criterion,
-                       device = device)
-      )
-zeroR_results = pd.concat(zeroR_results, axis=1).transpose()
-zeroR_results = append_weighted_average(zeroR_results)
+# ZERO BASELINE
+zeroR_results = run_zeroR_baseline(data=kf_actigraphy_dataloaders,
+                                   criterion=criterion,
+                                   device=device)
 zeroR_results.to_csv(os.path.join(RESULTS_DIR, "zeroR.csv"))
 
-#
-# LSTM training
-#
 
-print("LSTM:")
-
-lstm_results = []
-IN_2 = 60
-OUT_2 = 1
-HIDDEN_2 = 16
-LSTM_LAYERS = 1
-for i, (train_dataloader, test_dataloader) in enumerate(tqdm(kf_actigraphy_dataloaders, ncols=50)):
-      # reset model
-      model_2 = LSTM(IN_2, OUT_2, HIDDEN_2, LSTM_LAYERS).to(device)
-      
-      optimizer = torch.optim.Adam(params = model_2.parameters(), lr=0.005)
-      # train model
-      train_test(model_2, train_dataloader, test_dataloader, epochs = 10, optimizer=optimizer, 
-            criterion=criterion, device=device, verbose=True)
-      lstm_results.append(
-            eval_model(model = model_2,
-                       note = f"{i}",
-                       dataloader = test_dataloader,
-                       criterion = criterion,
-                       device = device)
-      )
-lstm_results = pd.concat(lstm_results, axis=1).transpose()
-lstm_results = append_weighted_average(lstm_results)
+# LONG SHORT TERM MEMORY NEURAL NETWORK V1
+lstm_results = run_lstm(data=kf_actigraphy_dataloaders,
+                        criterion=criterion,
+                        device=device,
+                        learning_rate=0.005,
+                        epochs=20,
+                        in_shape=60,
+                        out_shape=1,
+                        hidden_shape=16,
+                        lstm_layers=1)
 lstm_results.to_csv(os.path.join(RESULTS_DIR, "lstm.csv"))
 
-#
-# convNN training
-#
 
-print("1D Convolutional NN:")
-
-cnn_results = []
-IN_0 = 1
-OUT_0 = 1
-HIDDEN_0 = 32
-FLATTEN_0 = 720
-for i, (train_dataloader, test_dataloader) in enumerate(tqdm(kf_actigraphy_dataloaders, ncols=50)):
-      # reset model
-      model_0 = ConvNN(IN_0, OUT_0, HIDDEN_0, FLATTEN_0).to(device)
-      optimizer = torch.optim.Adam(params = model_0.parameters(), lr=0.001)
-      # train model
-      train_test(model_0, train_dataloader, test_dataloader, epochs = 10, optimizer=optimizer, 
-            criterion=criterion, device=device, verbose=False)
-      cnn_results.append(
-            eval_model(model = model_0,
-                       note = f"{i}",
-                       dataloader = test_dataloader,
-                       criterion = criterion,
-                       device = device)
-      )
-cnn_results = pd.concat(cnn_results, axis=1).transpose()
-cnn_results = append_weighted_average(cnn_results)
+# CONVOLUTIONAL NEURAL NETWORK
+cnn_results = run_cnn(data=kf_actigraphy_dataloaders,
+                      criterion=criterion,
+                      device=device,
+                      learning_rate=0.001,
+                      epochs=20,
+                      in_shape=1,
+                      out_shape=1,
+                      hidden_shape=32,
+                      flatten_factor=720)
 cnn_results.to_csv(os.path.join(RESULTS_DIR, "cnn.csv"))
 
-#
-# MLP training
-#
 
-print("Extracted Features MLP:")
-
-mlp_results = []
-IN_1 = len(kf_feature_dfs[0][0].columns)
-OUT_1 = 1
-HIDDEN_1 = 128
-for i, (train_dataloader, test_dataloader) in enumerate(tqdm(kf_feature_dataloaders, ncols=50)):
-      # reset model
-      model_1 = FeatureMLP(IN_1, OUT_1, HIDDEN_1).to(device)
-      optimizer = torch.optim.Adam(params = model_1.parameters(), lr=0.005)
-      # train model
-      train_test(model_1, train_dataloader, test_dataloader, epochs = 30, optimizer=optimizer, 
-            criterion=criterion, device=device, verbose=False)
-      mlp_results.append(
-            eval_model(model = model_1,
-                       note = f"{i}",
-                       dataloader = test_dataloader,
-                       criterion = criterion,
-                       device = device)
-      )
-mlp_results = pd.concat(mlp_results, axis=1).transpose()
-mlp_results = append_weighted_average(mlp_results)
+# MULTILAYER PERCEPTRON NEURAL NETWORK
+mlp_results = run_mlp(data=kf_feature_dataloaders,
+                      criterion=criterion,
+                      device=device,
+                      learning_rate=0.005,
+                      epochs=30,
+                      in_shape=NUM_FEATURES,
+                      out_shape=1,
+                      hidden_shape=128)
 mlp_results.to_csv(os.path.join(RESULTS_DIR, "mlp.csv"))
 
-#
-# LSTM Feature training
-#
 
-print("LSTM Feature Series:")
-
-lstm_series_results = []
-IN_3 = len(kf_feature_dfs[0][0].columns)
-OUT_3 = 1
-HIDDEN_3 = 16
-LSTM_LAYERS = 8
-for i, (train_dataloader, test_dataloader) in enumerate(tqdm(kf_series_dataloaders, ncols=50)):
-      # reset model
-      model_3 = LSTM_Feature(IN_3, OUT_3, HIDDEN_3, LSTM_LAYERS).to(device)
-      optimizer = torch.optim.Adam(params = model_3.parameters(), lr=0.0005)
-      # train model
-      train_test(model_3, train_dataloader, test_dataloader, epochs = 200, optimizer=optimizer, 
-            criterion=criterion, device=device, verbose=True)
-      lstm_series_results.append(
-            eval_model(model = model_3,
-                       note = f"{i}",
-                       dataloader = test_dataloader,
-                       criterion = criterion,
-                       device = device)
-      )
-lstm_series_results = pd.concat(lstm_series_results, axis=1).transpose()
-lstm_series_results = append_weighted_average(lstm_series_results)
+# LONG SHORT TERM MEMORY NEURAL NETWORK V2
+lstm_series_results = run_lstm_feature(data=kf_series_dataloaders,
+                                       criterion=criterion,
+                                       device=device,
+                                       learning_rate=0.0004,
+                                       epochs=200,
+                                       in_shape=NUM_FEATURES,
+                                       out_shape=1,
+                                       hidden_shape=16,
+                                       lstm_layers=8)
 lstm_series_results.to_csv(os.path.join(RESULTS_DIR, "lstm_series.csv"))
 
 
-
-print("Aggregating metrics...")
-
+# aggregate all metrics and output the summary table
 metrics = create_metrics_table([zeroR_results, cnn_results, mlp_results, forest_results, lstm_results, 
                               lstm_series_results, linear_svc_results, decision_tree_results])
 metrics.to_csv(os.path.join(RESULTS_DIR, "results.csv"))

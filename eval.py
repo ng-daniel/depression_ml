@@ -92,11 +92,8 @@ def eval_sklearn_model(model, X_test: pd.DataFrame, y_test: list, criterion: tor
     out = model.predict_proba(X_test)
     
     y_prob = out[:,1]
-    print(out)
-    print(y_prob)
     y_prob_tensor = torch.tensor(y_prob).float()
     y_pred = y_prob.round()
-    print(y_pred)
     y_test_tensor = torch.tensor(y_test).float()
     if device:
         y_prob_tensor = y_prob_tensor.to(device)

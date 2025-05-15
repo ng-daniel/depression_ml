@@ -9,6 +9,7 @@ import pandas as pd
 from tqdm import tqdm
 from data import (load_dataframe_labels, preprocess_train_test_dataframes, create_feature_dataframe, 
                   kfolds_dataframes, reset_feature_series, load_feature_series_data)
+from imblearn.over_sampling import SMOTE
 
 EXPORT_DIR = Path("data/processed_dataframes")
 
@@ -18,10 +19,24 @@ print("Loading raw dataframe...")
 actigraph_data, actigraph_labels = load_dataframe_labels(dir_names = ["data/control", "data/condition"],
                                                                     class_names = ["control", "condition"],
                                                                     time = "12:00:00", undersample=False)
+print("Oversampling minority class...")
+
+# # oversample the condition class to match the control class
+# oversample = SMOTE(sampling_strategy='minority')
+# resampled_data, resampled_labels = oversample.fit_resample(actigraph_data, actigraph_labels)
+
+# # create new index names for the generated samples
+# new_data_count = len(resampled_labels) - len(actigraph_labels)
+# new_index = [f'1_N_{i}' for i in range(new_data_count)]
+# resampled_data.index = list(actigraph_data.index) + new_index
+
+# actigraph_data = resampled_data
+# actigraph_labels = resampled_labels
+
 print("Loading folds and extracting features...")
 
-NUM_FOLDS = 10
-kf_dfs = kfolds_dataframes(actigraph_data, actigraph_labels, numfolds=NUM_FOLDS, shuffle=True, random_state=42, batch_size=32)
+NUM_FOLDS = 5
+kf_dfs = kfolds_dataframes(actigraph_data, actigraph_labels, numfolds=NUM_FOLDS, shuffle=True, batch_size=32, random_state=42)
 kf_actigraphy_dfs = []
 kf_feature_dfs = []
 for i in tqdm(range(NUM_FOLDS), ncols=50, leave=True):
