@@ -112,7 +112,7 @@ class LSTM_Feature(nn.Module):
         # N * 1 * L * in_shape
         self.norm = nn.BatchNorm2d(num_features=1)
         # hidden shape = number of Long term memory values
-        self.lstm = nn.LSTM(in_shape, hidden_shape, lstm_layers, batch_first=True)
+        self.lstm = nn.LSTM(in_shape, hidden_shape, lstm_layers, batch_first=True, dropout=0.1)
         self.fc = nn.Sequential(
             # nn.Linear(hidden_shape, hidden_shape),
             # nn.ReLU(),

@@ -2,92 +2,66 @@ print("--------------------------------")
 print("DEPRESSION CLASSIFICATION // V.0")
 print("--------------------------------")
 print("PROCESS: DATA LOADING")
-print("Loading libraries...")
 
-from pathlib import Path
+import os
 import pandas as pd
+import random
 from tqdm import tqdm
-from data import (load_dataframe_labels, preprocess_train_test_dataframes, create_feature_dataframe, 
-                  kfolds_dataframes, reset_feature_series, load_feature_series_data)
+from data import (load_dataframe_labels, export_kfolds_split_indices, preprocess_data, create_feature_dataframe, load_feature_series_data)
 from imblearn.over_sampling import SMOTE
+from sklearn.model_selection import KFold
 
-EXPORT_DIR = Path("data/processed_dataframes")
+EXPORT_DIR = "data/processed_dataframes"
 
-print("Loading raw dataframe...")
-
-# load dataframe
+# load raw dataset into dataframes and labels
 actigraph_data, actigraph_labels = load_dataframe_labels(dir_names = ["data/control", "data/condition"],
-                                                                    class_names = ["control", "condition"],
-                                                                    time = "12:00:00", undersample=False)
-print("Oversampling minority class...")
+                                                         class_names = ["control", "condition"],
+                                                         time = "12:00:00")
+actigraph_labels = list(actigraph_labels)
+# export raw dataset to csv
+actigraph_csv = actigraph_data.copy()
+actigraph_csv['label'] = actigraph_labels
+print(actigraph_csv)
+actigraph_csv.to_csv(os.path.join(EXPORT_DIR, 'data_raw.csv'))
 
-# # oversample the condition class to match the control class
-# oversample = SMOTE(sampling_strategy='minority')
-# resampled_data, resampled_labels = oversample.fit_resample(actigraph_data, actigraph_labels)
+# undersample control class by a set amount
+print(f"initial amount: {pd.Series(actigraph_labels).value_counts()}")
+undersample_amount = 0.10
+undersample_indices = random.sample(range(actigraph_labels.count(0)), round(actigraph_labels.count(0) * undersample_amount))
+resampled_data = actigraph_data.copy()
+print(actigraph_data.index[undersample_indices])
+print(len(resampled_data))
+resampled_data = resampled_data.drop(list(actigraph_data.index[undersample_indices]), axis=0)
+print(len(resampled_data))
+resampled_labels = [actigraph_labels[i] for i in range(len(actigraph_labels)) if i not in undersample_indices]
+print(f"undersampled amount: {pd.Series(resampled_labels).value_counts()}")
+# oversample the condition class to match the control class
+oversample = SMOTE(sampling_strategy='minority')
+resampled_index = list(resampled_data.index)
+resampled_data, resampled_labels = oversample.fit_resample(resampled_data, resampled_labels)
+# create new index names for the generated samples
+new_data_count = len(resampled_labels) - len(resampled_index)
+new_index = [f'1_N_{i}' for i in range(new_data_count)]
+resampled_data.index = resampled_index + new_index
+print(f"SMOTE amount: {pd.Series(resampled_labels).value_counts()}")
+# export resampled data to csv
+resampled_csv = resampled_data.copy()
+resampled_csv['label'] = list(resampled_labels)
+resampled_csv.to_csv(os.path.join(EXPORT_DIR, 'data_resampled.csv'))
 
-# # create new index names for the generated samples
-# new_data_count = len(resampled_labels) - len(actigraph_labels)
-# new_index = [f'1_N_{i}' for i in range(new_data_count)]
-# resampled_data.index = list(actigraph_data.index) + new_index
+# preprocessing_settings = {
+#     'log_base' : [None, 10, 2],
+#     'scale_range' : [None, (0,1), (-1,1)]
+# }
+# for i, log_base in enumerate(preprocessing_settings['log_base']):
+#     for j, scale_range in enumerate(preprocessing_settings['scale_range']):
+#         processed_data = preprocess_data(actigraph_data)
+#         processed_data.to_csv(os.path.join(EXPORT_DIR, f"data_log_{log_base}_scale_{scale_range}"))
 
-# actigraph_data = resampled_data
-# actigraph_labels = resampled_labels
-
-print("Loading folds and extracting features...")
-
-NUM_FOLDS = 5
-kf_dfs = kfolds_dataframes(actigraph_data, actigraph_labels, numfolds=NUM_FOLDS, shuffle=True, batch_size=32, random_state=42)
-kf_actigraphy_dfs = []
-kf_feature_dfs = []
-for i in tqdm(range(NUM_FOLDS), ncols=50, leave=True):
-    (X_train, X_test, y_train, y_test) = kf_dfs[i]
-
-    # load actigraphy folds
-    (X_train_p, X_test_p) = preprocess_train_test_dataframes(X_train, X_test)
-    kf_actigraphy_dfs.append((X_train_p, X_test_p, y_train, y_test))
-
-    # load feature folds
-    X_train_features = create_feature_dataframe(data = X_train_p, raw_data = X_train)
-    X_test_features = create_feature_dataframe(data = X_test_p, raw_data = X_test)
-    kf_feature_dfs.append((X_train_features, X_test_features, y_train, y_test))
-
-print(f"Loading feature series csv files and sample names...")
-
-# feature series data
-EXPORT_DIR_FEATURE_SERIES = Path("data/processed_dataframes/feature_series")
-load_feature_series_data(actigraph_data, EXPORT_DIR_FEATURE_SERIES.joinpath("csv_files"))
-for i, (X_train, X_test, y_train, y_test) in enumerate(tqdm(kf_actigraphy_dfs, ncols=50, leave=True)):
-    
-    # extract sample names from compacted dataframe
-    train_names = list(X_train.index)
-    test_names = list(X_test.index)
-    train_filename = f"fs{i}t.txt"
-    test_filename = f"fs{i}e.txt"
-
-    # write names to files in the kfolds folder
-    with open(EXPORT_DIR_FEATURE_SERIES.joinpath("kfolds", train_filename), "w") as file:
-        for name in train_names:
-            file.write(name + "\n")
-    with open(EXPORT_DIR_FEATURE_SERIES.joinpath("kfolds", test_filename), "w") as file:
-        for name in test_names:
-            file.write(name + "\n")
-
-print(f"Writing csv files to: {EXPORT_DIR}...")
-
-# actigraphy data
-EXPORT_DIR_ACTIGRAPHY = Path("data/processed_dataframes/actigraphy")
-for i, (X_train, X_test, y_train, y_test) in enumerate(kf_actigraphy_dfs):
-    X_train['label'] = y_train
-    X_test['label'] = y_test
-    X_train.to_csv(EXPORT_DIR_ACTIGRAPHY.joinpath(f"a{i}t.csv"), index=True)
-    X_test.to_csv(EXPORT_DIR_ACTIGRAPHY.joinpath(f"a{i}e.csv"), index=True)
-
-# extracted feature data
-EXPORT_DIR_FEATURE = Path("data/processed_dataframes/feature")
-for i, (X_train, X_test, y_train, y_test) in enumerate(kf_feature_dfs):
-    X_train['label'] = y_train
-    X_test['label'] = y_test
-    X_train.to_csv(EXPORT_DIR_FEATURE.joinpath(f"f{i}t.csv"), index=True)
-    X_test.to_csv(EXPORT_DIR_FEATURE.joinpath(f"f{i}e.csv"), index=True)
-
-print("Done.")
+# write cross validation train/test split indices to txt files
+export_kfolds_split_indices(data=actigraph_data,
+                            labels=actigraph_labels,
+                            export_dir=os.path.join(EXPORT_DIR, "kfolds"),
+                            n_splits=10,
+                            shuffle=True,
+                            random_state=42)

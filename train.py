@@ -11,7 +11,7 @@ import torch.nn as nn
 from data import create_dataloaders
 from eval import create_metrics_table
 from training_loops import (run_linear_svc, run_decision_tree, run_cnn, run_lstm, run_lstm_feature, 
-                            run_mlp, run_random_forest, run_zeroR_baseline)
+                            run_mlp, run_random_forest, run_zeroR_baseline, run_XGBoost)
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 # read actigraphy data and extracted features data to respective lists from 
@@ -102,20 +102,27 @@ for i in range(int(num_fs / 2)):
       # create and store raw tensors + dataloaders
       kf_series_tensors.append((train_tensors, test_tensor, train_labels, test_label))
       kf_series_dataloaders.append(
-            create_dataloaders(X_train, X_test, y_train, y_test, shuffle=True, batch_size=64)
+            create_dataloaders(X_train, X_test, y_train, y_test, shuffle=True, batch_size=32)
       )
-
 
 # setup output directory, class weights, and loss function, 
 # aka criterion, for model training and evaluation
 RESULTS_DIR = "results"
-class_weights = torch.tensor([1.1]).to(device)
+class_weights = torch.tensor([1]).to(device)
 class_weights_dict = {
       0 : 1,
       1 : class_weights.item()
 }
 criterion = nn.BCEWithLogitsLoss(pos_weight=class_weights).to(device)
 NUM_FEATURES = len(kf_feature_dfs[0][0].columns)
+
+
+# XGBOOST
+xgboost_results = run_XGBoost(data=kf_feature_dfs,
+                              criterion=criterion,
+                              device=device,
+                              learning_rate=0.15)
+xgboost_results.to_csv(os.path.join(RESULTS_DIR, "xgboost.csv"))
 
 
 # LINEAR SUPPORT VECTOR MACHINE CLASSIFIER
@@ -139,7 +146,7 @@ forest_results = run_random_forest(data=kf_feature_dfs,
                                    criterion=criterion,
                                    device=device,
                                    weights=class_weights_dict,
-                                   n_estimators=300)
+                                   n_estimators=1000)
 forest_results.to_csv(os.path.join(RESULTS_DIR, "random_forest.csv"))
 
 
@@ -155,12 +162,25 @@ lstm_results = run_lstm(data=kf_actigraphy_dataloaders,
                         criterion=criterion,
                         device=device,
                         learning_rate=0.005,
-                        epochs=20,
+                        epochs=15,
                         in_shape=60,
                         out_shape=1,
                         hidden_shape=16,
                         lstm_layers=1)
 lstm_results.to_csv(os.path.join(RESULTS_DIR, "lstm.csv"))
+
+
+# LONG SHORT TERM MEMORY NEURAL NETWORK V2
+lstm_series_results = run_lstm_feature(data=kf_series_dataloaders,
+                                       criterion=criterion,
+                                       device=device,
+                                       learning_rate=0.00025,
+                                       epochs=200,
+                                       in_shape=NUM_FEATURES,
+                                       out_shape=1,
+                                       hidden_shape=16,
+                                       lstm_layers=8)
+lstm_series_results.to_csv(os.path.join(RESULTS_DIR, "lstm_series.csv"))
 
 
 # CONVOLUTIONAL NEURAL NETWORK
@@ -187,23 +207,9 @@ mlp_results = run_mlp(data=kf_feature_dataloaders,
                       hidden_shape=128)
 mlp_results.to_csv(os.path.join(RESULTS_DIR, "mlp.csv"))
 
-
-# LONG SHORT TERM MEMORY NEURAL NETWORK V2
-lstm_series_results = run_lstm_feature(data=kf_series_dataloaders,
-                                       criterion=criterion,
-                                       device=device,
-                                       learning_rate=0.0004,
-                                       epochs=200,
-                                       in_shape=NUM_FEATURES,
-                                       out_shape=1,
-                                       hidden_shape=16,
-                                       lstm_layers=8)
-lstm_series_results.to_csv(os.path.join(RESULTS_DIR, "lstm_series.csv"))
-
-
 # aggregate all metrics and output the summary table
 metrics = create_metrics_table([zeroR_results, cnn_results, mlp_results, forest_results, lstm_results, 
-                              lstm_series_results, linear_svc_results, decision_tree_results])
+                              lstm_series_results, linear_svc_results, decision_tree_results, xgboost_results])
 metrics.to_csv(os.path.join(RESULTS_DIR, "results.csv"))
 print(metrics)
 

@@ -6,6 +6,7 @@ from tqdm import tqdm
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.svm import SVC
 from sklearn.tree import DecisionTreeClassifier
+from xgboost import XGBClassifier
 
 from engine import train_test
 from eval import eval_model, eval_sklearn_model, append_weighted_average
@@ -74,6 +75,29 @@ def run_random_forest(data: list, criterion, device, weights = None, n_estimator
       forest_results = pd.concat(forest_results, axis=1).transpose()
       forest_results = append_weighted_average(forest_results)
       return forest_results
+
+def run_XGBoost(data: list, criterion, device, learning_rate, gamma = None, weights = None):
+      print("Decision Tree:")
+
+      XGBoost_results = []
+      for i, (X_train, X_test, y_train, y_test) in enumerate(tqdm(data, ncols=50)):
+            # reset model
+            model = XGBClassifier(learning_rate=learning_rate,
+                                  gamma=gamma,
+                                  verbosity=2)
+            # train model
+            model.fit(X_train, y_train)
+            XGBoost_results.append(
+                  eval_sklearn_model(model = model,
+                                    note = f"{i}",
+                                    X_test=X_test,
+                                    y_test=y_test,
+                                    criterion = criterion,
+                                    device = device)
+            )
+      XGBoost_results = pd.concat(XGBoost_results, axis=1).transpose()
+      XGBoost_results = append_weighted_average(XGBoost_results)
+      return XGBoost_results
 
 def run_zeroR_baseline(data: list, criterion, device):
       print("ZeroR Baseline:")

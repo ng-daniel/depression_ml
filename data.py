@@ -28,7 +28,19 @@ class ActigraphDataset(Dataset):
         y = self.y[index]
         return X, y
 
-def load_data_from_folder(dir_name: str, class_type: str, class_label: int, output_df: pd.DataFrame, scores_df: pd.DataFrame, start_time: str = None):
+def _load_data_from_folder(dir_name: str, class_type: str, class_label: int, output_df: pd.DataFrame, scores_df: pd.DataFrame, start_time: str = None):
+    '''
+    Processes and groups all individual data files into a single dataframe, and then concatenates them to an existing dataframe.
+    
+    Args
+    - dir_name - the directory to process the dataframe from
+    - class_type - the class name of data to load ('control', 'condition')
+    - class_label - the class number of data to load (0 / 1)
+    - output_df - the dataframe to concatenate final compliation to
+    - scores_df - dataframe containing the 'scores' which includes number of recorded days per subject
+    - start_tile - arbitrary time selected to start counting data to ensure uniformity across subjects (ie. 12:00:00)
+    '''
+
     data = pd.DataFrame()
     day_dfs = []
     
@@ -41,7 +53,7 @@ def load_data_from_folder(dir_name: str, class_type: str, class_label: int, outp
         datapath = os.path.join(dir_name, filename + ".csv")
         file_df = pd.read_csv(datapath)
 
-        # find occurences of 
+        # find all occurences of start time
 
         sr = file_df['timestamp'].map(lambda x: x.split()[1])
         indexes_of_time = []
@@ -64,10 +76,19 @@ def load_data_from_folder(dir_name: str, class_type: str, class_label: int, outp
     
     # concatenate all columns into single dataframe
     data = pd.concat(day_dfs, axis=1)
-
     return data
 
-def load_dataframe_labels(dir_names: list, class_names: list, time: str = None, undersample: bool = False):
+def load_dataframe_labels(dir_names: list, class_names: list, time: str = None):
+    '''
+    Aggregates all data into a single dataframe, starting from a uniform time value.
+    
+    Args:
+    - dir_names - a list of the directories to search for data
+    - class_names - a list of the relevant class name corresponding to each directory
+    - time - arbitrary time selected to start counting data to ensure uniformity across subjects (ie. 12:00:00)
+
+    Returns a dataframe containing all the data
+    '''
     # load scores dataframe (information about each datafile)
     scores = pd.read_csv("data/scores.csv", index_col='number')
     
@@ -76,15 +97,9 @@ def load_dataframe_labels(dir_names: list, class_names: list, time: str = None, 
     dfs = []
     for CLASS in range(len(dir_names)):
         dfs.append(
-            load_data_from_folder(dir_names[CLASS], class_names[CLASS], 
+            _load_data_from_folder(dir_names[CLASS], class_names[CLASS], 
                                     CLASS, data, scores, time)
         )
-    # truncate control dataframe to match condition dataframe's number of samples
-    if undersample:
-        dfs[0] = dfs[0].iloc[:,0:len(dfs[1].columns)]
-        print(len(dfs[1].columns))
-        print(dfs[0])
-        print(dfs[1])
     
     # combine control and condition dfs
     data = pd.concat(dfs, axis=1)
@@ -94,10 +109,7 @@ def load_dataframe_labels(dir_names: list, class_names: list, time: str = None, 
     labels = data.index.map(lambda x: int(x[0]))
     return data, labels
 
-def kfolds_dataframes(data: pd.DataFrame, labels: list, numfolds: int, shuffle: bool, batch_size: int, random_state: int = None):
-    # apply log function to all values
-    data = data.map(lambda x: log_skip_zeroes(x))
-    
+def kfolds_dataframes(data: pd.DataFrame, labels: list, numfolds: int, shuffle: bool, random_state: int = None):
     if shuffle:
         kf = KFold(n_splits=numfolds, shuffle=shuffle, random_state=random_state)
     else:
@@ -116,27 +128,28 @@ def kfolds_dataframes(data: pd.DataFrame, labels: list, numfolds: int, shuffle: 
     
     return folds
 
-def preprocess_train_test_dataframes(X_train: pd.DataFrame, X_test: pd.DataFrame):
+def preprocess_data(data: pd.DataFrame, log_base : int = None, scale_range : tuple = None):
+    '''
+    Preprocesses
+    '''
     # apply log function to all values
-    X_train = X_train.map(lambda x: log_skip_zeroes(x))
-    X_test = X_test.map(lambda x: log_skip_zeroes(x))
+    if log_base:
+        data = data.map(lambda x: log_skip_zeroes(x, log_base))
     
-    # scale data to be within 0-1
-    scaler = MinMaxScaler((0,1))
-    X_train_p = pd.DataFrame(scaler.fit_transform(X_train))
-    X_test_p = pd.DataFrame(scaler.transform(X_test))
+    # scale data to be within a specific range
+    if scale_range:
+        scaler = MinMaxScaler(scale_range)
+        data_index = data.index
+        data = pd.DataFrame(scaler.fit_transform(data))
+        data.index = data_index
 
-    X_train_p.index = X_train.index
-    X_test_p.index = X_test.index
-
-    return (X_train_p, X_test_p)
-
-def load_dataframes_from_folders():
-    pass
+    return data
 
 def create_dataloaders(X_train: pd.DataFrame, X_test: pd.DataFrame, y_train: list, y_test: list,
                          shuffle: bool, batch_size: int):
-    
+    '''
+    Wraps train / test dataframes of any data format into a dataloader
+    '''
     # convert data to tensors
     if (type(X_train) == pd.DataFrame):
         X_train = torch.from_numpy(X_train.to_numpy()).float().unsqueeze(dim=1)
@@ -184,63 +197,36 @@ def extract_stats_from_window(data: pd.Series):
         win = data.iloc[i:i+len(data)//4]
         q_win.append(win)
     
+    q_means = [win.mean() for win in q_win]
+    q_stds = [win.std() for win in q_win]
+    q_maxs = [win.max() for win in q_win]
+    q_mins = [win.min() for win in q_win]
+
     labels.extend([f'q{i}_mean' for i in range(1,len(q_win)+1)])
-    stats.extend([win.mean() for win in q_win])
+    stats.extend(q_means)
     
     labels.extend([f'q{i}_std' for i in range(1,len(q_win)+1)])
-    stats.extend([win.std() for win in q_win])
+    stats.extend(q_stds)
     
     labels.extend([f'q{i}_max' for i in range(1,len(q_win)+1)])
-    stats.extend([win.max() for win in q_win])
+    stats.extend(q_maxs)
     
     labels.extend([f'q{i}_min' for i in range(1,len(q_win)+1)])
-    stats.extend([win.min() for win in q_win])
+    stats.extend(q_mins)
+
+    # calculate difference in quarter statistics
     
+    for i in range(len(q_means)):
+        for j in range(i+1, len(q_means)):
+            labels.append(f'q{i}_minus_q{j}_mean')
+            stats.append(q_means[i] - q_means[j])
+
     # convert stats and labels into series
     features = pd.Series(stats, index = labels)
     return features
 
-def extract_fft_from_window(data: pd.Series):
-    '''
-    Extract signal information from a window of actigraph data using a fast fourier transform:
-        - Magnitude of Frequency Components of FFT (720)
-        - Top 10 Frequency values
-    '''
-    # calculating fft values and listing the top 10 largest amplitudes
-    
-    scaler = MinMaxScaler((0,1))
-    zero_dc_data = data.map(lambda x: x - data.mean())
-    fourier_transform = rfft(zero_dc_data, len(zero_dc_data))
-    ft_abs_scaled = scaler.fit_transform(np.abs(fourier_transform).reshape(-1, 1)).squeeze()
-    top_fourier = list(pd.Series(ft_abs_scaled).sort_values(ascending=False).head(n=10).index)
-    
-    # dividing by number of frequencies to keep values at a reasonable value for ML
-
-    top_fourier = [freq / len(ft_abs_scaled) for freq in top_fourier]
-    
-    # loading values into a series with descriptive index
-    
-    #fft_col_names = [f'fft_{i+1}' for i in range(len(ft_abs_scaled))] + [f'fft_top_{i+1}' for i in range(len(top_fourier))]
-    fft_col_names = [f'fft_top_{i+1}' for i in range(len(top_fourier))]
-    #fft_features = list(ft_abs_scaled) + top_fourier
-    fft_features = top_fourier
-    fft_data = pd.Series(fft_features, index = fft_col_names)
-    return fft_data
-
 def create_feature_dataframe(data: pd.DataFrame, raw_data: pd.DataFrame):
-    feature_rows = []
-
-    # for i in range(len(data)):
-    #     win = data.iloc[i]
-    #     raw_win = raw_data.iloc[i]
-    #     stats_row = extract_stats_from_window(win)
-    #     fft_row = extract_fft_from_window(raw_win)
-    #     feature_row = pd.concat([stats_row, fft_row], axis = 1)
-    #     feature_rows.append(feature_row)
-
     extracted_stats = data.apply(extract_stats_from_window, axis=1).reset_index(drop=True)
-    #extracted_fft = raw_data.apply(extract_fft_from_window, axis=1).reset_index(drop=True)
-    #features = pd.concat([extracted_stats, extracted_fft], axis=1)
     features =  extracted_stats
     features.index = data.index
     return features
@@ -262,8 +248,8 @@ def load_feature_series_data(data: pd.DataFrame, dir: str):
         
         # preprocess each sample
         sample = data.iloc[i].copy()
-        # sample = sample.apply(log_skip_zeroes)
-        scaler = MinMaxScaler((0,1))
+        sample = sample.apply(log_skip_zeroes)
+        scaler = MinMaxScaler((-1,1))
         sample = pd.Series(scaler.fit_transform(pd.DataFrame(sample)).squeeze())
 
         # extract feature series and write to csv
@@ -294,3 +280,30 @@ def reset_feature_series(num_folds: int):
         os.mkdir(fold_dir)
         os.mkdir(os.path.join(fold_dir, "train"))
         os.mkdir(os.path.join(fold_dir, "test"))
+
+def export_kfolds_split_indices(data: pd.DataFrame, labels: list, export_dir: str, n_splits: int, shuffle: bool, random_state: int = None):
+    '''
+    Splits data into N folds, writing each fold to a directory as a text file.
+    '''
+    kf = KFold(n_splits=n_splits, 
+               shuffle=shuffle, 
+               random_state=random_state)
+    kf.get_n_splits(data)
+
+    for i, (train_index, test_index) in enumerate(kf.split(data)):
+
+        X_train = data.iloc[train_index]
+        X_test = data.iloc[test_index]
+
+        train_names = list(X_train.index)
+        test_names = list(X_test.index)
+        train_filename = f"fold{i}t.txt"
+        test_filename = f"fold{i}e.txt"   
+
+        # write names to files in the kfolds folder
+        with open(os.path.join(export_dir, train_filename), "w") as file:
+            for name in train_names:
+                file.write(name + "\n")
+        with open(os.path.join(export_dir, test_filename), "w") as file:
+            for name in test_names:
+                file.write(name + "\n")
