@@ -102,20 +102,23 @@ class FeatureMLP(nn.Module):
         return x
 
 class LSTM_Feature(nn.Module):
-    def __init__(self, in_shape, out_shape, hidden_shape, lstm_layers):
+    def __init__(self, in_shape, out_shape, hidden_shape, lstm_layers, window_size):
         super().__init__()
         self.in_shape = in_shape
         self.out_shape = out_shape
         self.hidden_shape = hidden_shape
         self.lstm_layers = lstm_layers
+        self.LEN_DAY = 1440
+        self.seq_len = self.LEN_DAY // window_size
+        self.num_features = self.in_shape // self.seq_len
         
         # N * 1 * L * in_shape
-        self.norm = nn.BatchNorm2d(num_features=1)
         # hidden shape = number of Long term memory values
-        self.lstm = nn.LSTM(in_shape, hidden_shape, lstm_layers, batch_first=True, dropout=0.1)
+        self.lstm = nn.LSTM(self.num_features, hidden_shape, lstm_layers, batch_first=True, dropout=0.1)
         self.fc = nn.Sequential(
-            # nn.Linear(hidden_shape, hidden_shape),
-            # nn.ReLU(),
+            nn.Linear(hidden_shape, hidden_shape),
+            nn.ReLU(),
+            nn.Dropout(p=0.5),
             nn.Linear(hidden_shape, out_shape)
         )
     def forward(self, x):
@@ -126,7 +129,7 @@ class LSTM_Feature(nn.Module):
         c0 = torch.zeros(self.lstm_layers, 
                          x.size(0), 
                          self.hidden_shape).to(x.device)
-        # print(x.shape)
+        x = torch.reshape(x, (x.size(0), self.seq_len, self.num_features))
         x, _ = self.lstm(x, (h0, c0))
         # print(f"{x.shape} | {hn.shape} | {cn.shape}")
         x = self.fc(x[:, -1, :])
@@ -142,25 +145,27 @@ class ConvLSTM(nn.Module):
         self.hidden_shape = hidden_shape
         self.lstm_layers = lstm_layers
         
-        self.conv_block_1 = nn.Sequential(
-            nn.Conv1d(in_shape, hidden_shape, kernel_size=3, padding = 1),
+        self.conv_block = nn.Sequential(
+            nn.Conv1d(1, 32, kernel_size=5, padding=2),
             nn.ReLU(),
-            nn.Conv1d(hidden_shape, hidden_shape, kernel_size=3, padding = 1),
+            nn.MaxPool1d(2),
+
+            nn.Conv1d(32, 64, kernel_size=5, padding=2),
             nn.ReLU(),
-            nn.MaxPool1d(2)
+            nn.MaxPool1d(2),
+
+            nn.Conv1d(64, 128, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.MaxPool1d(2)    
         )
-        self.conv_block_2 = nn.Sequential(
-            nn.Conv1d(hidden_shape, hidden_shape, kernel_size=3, padding = 1),
-            nn.ReLU(),
-            nn.Conv1d(hidden_shape, hidden_shape, kernel_size=3, padding = 1),
-            nn.ReLU(),
-            nn.MaxPool1d(2)
-        )
-        
-        self.lstm = nn.LSTM(hidden_shape, hidden_shape, lstm_layers, batch_first=True)
+        self.lstm = nn.LSTM(hidden_shape, 
+                            hidden_shape, 
+                            lstm_layers, 
+                            batch_first=True)
         self.fc = nn.Sequential(
             nn.Linear(hidden_shape, hidden_shape),
             nn.ReLU(),
+            nn.Dropout(p=0.5),
             nn.Linear(hidden_shape, out_shape)
         )
     def forward(self, x):
@@ -171,10 +176,7 @@ class ConvLSTM(nn.Module):
                          x.size(0), 
                          self.hidden_shape).to(x.device)
         
-        x = self.conv_block_1(x)
-        #x = torch.reshape(x, (x.size(0), int(x.size(1) / self.in_shape), self.in_shape))
-        # print(x)
-        # print(x.shape)
+        x = self.conv_block(x)
         x = x.permute((0,2,1))
         x, _ = self.lstm(x, (h0, c0))
         x = self.fc(x[:, -1, :])

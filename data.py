@@ -128,22 +128,27 @@ def kfolds_dataframes(data: pd.DataFrame, labels: list, numfolds: int, shuffle: 
     
     return folds
 
-def preprocess_data(data: pd.DataFrame, log_base : int = None, scale_range : tuple = None):
+def preprocess_train_test_dataframes(X_train: pd.DataFrame, X_test: pd.DataFrame = None, log_base : int = None, scale_range : tuple = None):
     '''
     Preprocesses
     '''
     # apply log function to all values
     if log_base:
-        data = data.map(lambda x: log_skip_zeroes(x, log_base))
+        X_train = X_train.map(lambda x: log_skip_zeroes(x, log_base))
+        X_test = X_test.map(lambda x: log_skip_zeroes(x, log_base)) if X_test is not None else None
     
     # scale data to be within a specific range
     if scale_range:
         scaler = MinMaxScaler(scale_range)
-        data_index = data.index
-        data = pd.DataFrame(scaler.fit_transform(data))
-        data.index = data_index
+        train_index = X_train.index
+        X_train = pd.DataFrame(scaler.fit_transform(X_train))
+        X_train.index = train_index
+        if X_test is not None:
+            test_index = X_test.index
+            X_test = pd.DataFrame(scaler.transform(X_test))
+            X_test.index = test_index
 
-    return data
+    return (X_train, X_test)
 
 def create_dataloaders(X_train: pd.DataFrame, X_test: pd.DataFrame, y_train: list, y_test: list,
                          shuffle: bool, batch_size: int):
@@ -165,7 +170,7 @@ def create_dataloaders(X_train: pd.DataFrame, X_test: pd.DataFrame, y_train: lis
 
     return (train_dataloader, test_dataloader)
 
-def extract_stats_from_window(data: pd.Series):
+def extract_stats_from_window(data: pd.Series, include_quarter_diff = False):
     '''
     Extracts stats from a window of actigraph data (total of ):
         - Sample Mean, Sample Std. Dev., Sample Skewness, Sample Kurtosis, Max, Min (6)
@@ -179,22 +184,24 @@ def extract_stats_from_window(data: pd.Series):
     Returns
         - a dataframe containing a single row, where the columns are the extracted features 
     '''     
+    data_np = data.to_numpy()
+    
     stats = []
     labels = []
 
     # loading descriptive statistics
-    labels.extend(['mean', 'std', 'skew', 'kurt', 'max', 'min'])
-    stats.extend([data.mean(), data.std(), data.skew(), data.kurt(), data.max(), data.min()])
+    labels.extend(['mean', 'std', 'max', 'min'])
+    stats.extend([data_np.mean(), data_np.std(), data_np.max(), data_np.min()])
     
     # calculating half window statistics
-    h_win = [data.iloc[0:len(data)//2], data.iloc[len(data)//2:]]
+    h_win = [data_np[0:len(data_np)//2], data_np[len(data_np)//2:]]
     labels.extend(['h_mean_change', 'h_max_change', 'h_min_change'])
     stats.extend([h_win[1].mean() - h_win[0].mean(), h_win[1].max() - h_win[0].max(), h_win[1].min() - h_win[0].min()])
     
     # calculating quarter window statistics
     q_win = []
-    for i in range(0, len(data), len(data)//4):
-        win = data.iloc[i:i+len(data)//4]
+    for i in range(0, len(data_np), len(data_np)//4):
+        win = data_np[i:i+len(data_np)//4]
         q_win.append(win)
     
     q_means = [win.mean() for win in q_win]
@@ -215,46 +222,40 @@ def extract_stats_from_window(data: pd.Series):
     stats.extend(q_mins)
 
     # calculate difference in quarter statistics
-    
-    for i in range(len(q_means)):
-        for j in range(i+1, len(q_means)):
-            labels.append(f'q{i}_minus_q{j}_mean')
-            stats.append(q_means[i] - q_means[j])
+    if include_quarter_diff:
+        for i in range(len(q_means)):
+            for j in range(i+1, len(q_means)):
+                labels.append(f'q{i}_minus_q{j}_mean')
+                stats.append(q_means[i] - q_means[j])
 
     # convert stats and labels into series
     features = pd.Series(stats, index = labels)
     return features
 
-def create_feature_dataframe(data: pd.DataFrame, raw_data: pd.DataFrame):
-    extracted_stats = data.apply(extract_stats_from_window, axis=1).reset_index(drop=True)
-    features =  extracted_stats
-    features.index = data.index
-    return features
+def create_feature_dataframe(data: pd.DataFrame, include_quarter_diff = False):
+    extracted_stats = data.apply(extract_stats_from_window, axis=1, args=(include_quarter_diff,)).reset_index(drop=True)
+    extracted_stats.index = data.index
+    return extracted_stats
 
-def extract_feature_series(data: pd.Series):
+def create_long_feature_dataframe(data: pd.DataFrame, window_size = 30, include_quarter_diff = False):
+    def extract_long_feature_series(x: pd.Series):
+        return extract_feature_series(x, window_size, include_quarter_diff).stack()
+    extracted_stats_long = data.apply(extract_long_feature_series, axis=1)
+    extracted_stats_long.columns = ['_'.join(str(val) for val in col).strip() for col in extracted_stats_long.columns.values]
+    print(extracted_stats_long)
+    return extracted_stats_long
+
+def extract_feature_series(data: pd.Series, window_size = 30, include_quarter_diff = False):
     '''
     Transforms a series of raw actigraphy data into a dataframe
     containing feature data across 24 hours using a sliding window
     approach for increasing increments of 30 minutes.
     '''
     features_by_window = []
-    for i in range(0, len(data), 30):
-        window = data[i:i+30]
-        features_by_window.append(extract_stats_from_window(window))
+    for i in range(0, len(data), window_size):
+        window = data[i:i+window_size]
+        features_by_window.append(extract_stats_from_window(window, include_quarter_diff))
     return pd.concat(features_by_window, axis=1).transpose()
-
-def load_feature_series_data(data: pd.DataFrame, dir: str):
-    for i in range(len(data)):
-        
-        # preprocess each sample
-        sample = data.iloc[i].copy()
-        sample = sample.apply(log_skip_zeroes)
-        scaler = MinMaxScaler((-1,1))
-        sample = pd.Series(scaler.fit_transform(pd.DataFrame(sample)).squeeze())
-
-        # extract feature series and write to csv
-        feature_series = extract_feature_series(sample)
-        feature_series.to_csv(os.path.join(dir, f"{data.index[i]}.csv"))
 
 def empty_dataframe_directory(dir_name: str):
     '''
@@ -284,6 +285,7 @@ def reset_feature_series(num_folds: int):
 def export_kfolds_split_indices(data: pd.DataFrame, labels: list, export_dir: str, n_splits: int, shuffle: bool, random_state: int = None):
     '''
     Splits data into N folds, writing each fold to a directory as a text file.
+
     '''
     kf = KFold(n_splits=n_splits, 
                shuffle=shuffle, 
@@ -307,3 +309,7 @@ def export_kfolds_split_indices(data: pd.DataFrame, labels: list, export_dir: st
         with open(os.path.join(export_dir, test_filename), "w") as file:
             for name in test_names:
                 file.write(name + "\n")
+
+def load_kf_actigraphy_dfs():
+    pass
+

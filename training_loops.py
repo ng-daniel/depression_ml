@@ -54,14 +54,19 @@ def run_decision_tree(data: list, criterion, device, weights = None):
       decision_tree_results = append_weighted_average(decision_tree_results)
       return decision_tree_results
 
-def run_random_forest(data: list, criterion, device, weights = None, n_estimators : int = 100):
+def run_random_forest(data: list, criterion, device, weights = None, n_estimators : int = 100, max_depth = None, max_features = 'sqrt', min_samples_split = 2, min_samples_leaf = 1, bootstrap = False):
       print("Random Forest:")
       
       forest_results = []
       N_ESTIMATORS = n_estimators
       for i, (X_train, X_test, y_train, y_test) in enumerate(tqdm(data, ncols=50)):
             # reset model
-            model_2 = RandomForestClassifier(n_estimators=N_ESTIMATORS)
+            model_2 = RandomForestClassifier(n_estimators=N_ESTIMATORS,
+                                             max_depth=max_depth,
+                                             max_features=max_features,
+                                             min_samples_split=min_samples_split,
+                                             min_samples_leaf=min_samples_leaf,
+                                             bootstrap=bootstrap)
             # train model
             model_2.fit(X_train, y_train)
             forest_results.append(
@@ -76,15 +81,19 @@ def run_random_forest(data: list, criterion, device, weights = None, n_estimator
       forest_results = append_weighted_average(forest_results)
       return forest_results
 
-def run_XGBoost(data: list, criterion, device, learning_rate, gamma = None, weights = None):
-      print("Decision Tree:")
+def run_XGBoost(data: list, criterion, device, learning_rate, gamma = None, weights = None, max_depth = 6, min_child_weight = 1, subsample = 1, colsample_bytree = 1):
+      print("XGBoost:")
 
       XGBoost_results = []
       for i, (X_train, X_test, y_train, y_test) in enumerate(tqdm(data, ncols=50)):
             # reset model
             model = XGBClassifier(learning_rate=learning_rate,
                                   gamma=gamma,
-                                  verbosity=2)
+                                  verbosity=2,
+                                  max_depth=max_depth, 
+                                  min_child_weight=min_child_weight, 
+                                  subsample=subsample, 
+                                  colsample_bytree=colsample_bytree)
             # train model
             model.fit(X_train, y_train)
             XGBoost_results.append(
@@ -194,7 +203,7 @@ def run_mlp(data: list, criterion, device, learning_rate, epochs, in_shape, out_
       mlp_results = append_weighted_average(mlp_results)
       return mlp_results
 
-def run_lstm_feature(data: list, criterion, device, learning_rate, epochs, in_shape, out_shape, hidden_shape, lstm_layers):
+def run_lstm_feature(data: list, criterion, device, learning_rate, epochs, in_shape, out_shape, hidden_shape, lstm_layers, window_size):
       print("LSTM V2:")
       
       lstm_series_results = []
@@ -202,9 +211,10 @@ def run_lstm_feature(data: list, criterion, device, learning_rate, epochs, in_sh
       OUT_3 = out_shape
       HIDDEN_3 = hidden_shape
       LSTM_LAYERS = lstm_layers
+      WINDOW_SIZE = window_size
       for i, (train_dataloader, test_dataloader) in enumerate(tqdm(data, ncols=50)):
             # reset model
-            model_3 = LSTM_Feature(IN_3, OUT_3, HIDDEN_3, LSTM_LAYERS).to(device)
+            model_3 = LSTM_Feature(IN_3, OUT_3, HIDDEN_3, LSTM_LAYERS, WINDOW_SIZE).to(device)
             optimizer = torch.optim.Adam(params = model_3.parameters(), lr=learning_rate)
             # train model
             train_test(model_3, train_dataloader, test_dataloader, epochs = epochs, optimizer=optimizer, 
