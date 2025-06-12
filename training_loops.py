@@ -10,17 +10,20 @@ from xgboost import XGBClassifier
 
 from engine import train_test
 from eval import eval_model, eval_sklearn_model, append_weighted_average
-from model import ZeroR, ConvNN, LSTM, FeatureMLP, LSTM_Feature
+from model import ZeroR, ConvNN, LSTM, FeatureMLP, LSTM_Feature, ConvLSTM
 
 def run_linear_svc(data: list, criterion, device, weights = None):
     print("Linear SVM Classifier:")
     
     linear_svc_results = []
     for i, (X_train, X_test, y_train, y_test) in enumerate(tqdm(data, ncols=50)):
+        print(f"{i}, running!")
         # reset model
         model = SVC(kernel='linear', probability=True, class_weight=weights)
+        print(X_train)
         # train model
         model.fit(X_train, y_train)
+        print("done training")
         linear_svc_results.append(
                 eval_sklearn_model(model = model,
                                 note = f"{i}",
@@ -166,7 +169,7 @@ def run_cnn(data: list, criterion, device, learning_rate, epochs, in_shape, out_
             optimizer = torch.optim.Adam(params = model_0.parameters(), lr=learning_rate)
             # train model
             train_test(model_0, train_dataloader, test_dataloader, epochs = epochs, optimizer=optimizer, 
-                  criterion=criterion, device=device, verbose=False)
+                  criterion=criterion, device=device, verbose=True)
             cnn_results.append(
                   eval_model(model = model_0,
                         note = f"{i}",
@@ -203,7 +206,7 @@ def run_mlp(data: list, criterion, device, learning_rate, epochs, in_shape, out_
       mlp_results = append_weighted_average(mlp_results)
       return mlp_results
 
-def run_lstm_feature(data: list, criterion, device, learning_rate, epochs, in_shape, out_shape, hidden_shape, lstm_layers, window_size):
+def run_lstm_feature(data: list, criterion, device, learning_rate, weight_decay, epochs, in_shape, out_shape, hidden_shape, lstm_layers, window_size):
       print("LSTM V2:")
       
       lstm_series_results = []
@@ -215,7 +218,7 @@ def run_lstm_feature(data: list, criterion, device, learning_rate, epochs, in_sh
       for i, (train_dataloader, test_dataloader) in enumerate(tqdm(data, ncols=50)):
             # reset model
             model_3 = LSTM_Feature(IN_3, OUT_3, HIDDEN_3, LSTM_LAYERS, WINDOW_SIZE).to(device)
-            optimizer = torch.optim.Adam(params = model_3.parameters(), lr=learning_rate)
+            optimizer = torch.optim.AdamW(params = model_3.parameters(), lr=learning_rate, weight_decay=weight_decay)
             # train model
             train_test(model_3, train_dataloader, test_dataloader, epochs = epochs, optimizer=optimizer, 
                   criterion=criterion, device=device, verbose=True)
@@ -229,3 +232,29 @@ def run_lstm_feature(data: list, criterion, device, learning_rate, epochs, in_sh
       lstm_series_results = pd.concat(lstm_series_results, axis=1).transpose()
       lstm_series_results = append_weighted_average(lstm_series_results)
       return lstm_series_results
+
+def run_conv_lstm(data: list, criterion, device, learning_rate, weight_decay, epochs, in_shape, out_shape, hidden_shape, lstm_layers):
+      print("CONV LSTM:")
+      
+      conv_lstm_results = []
+      IN_3 = in_shape
+      OUT_3 = out_shape
+      HIDDEN_3 = hidden_shape
+      LSTM_LAYERS = lstm_layers
+      for i, (train_dataloader, test_dataloader) in enumerate(tqdm(data, ncols=50)):
+            # reset model
+            model_3 = ConvLSTM(IN_3, OUT_3, HIDDEN_3, LSTM_LAYERS).to(device)
+            optimizer = torch.optim.AdamW(params = model_3.parameters(), lr=learning_rate, weight_decay=weight_decay)
+            # train model
+            train_test(model_3, train_dataloader, test_dataloader, epochs = epochs, optimizer=optimizer, 
+                  criterion=criterion, device=device, verbose=True)
+            conv_lstm_results.append(
+                  eval_model(model = model_3,
+                        note = f"{i}",
+                        dataloader = test_dataloader,
+                        criterion = criterion,
+                        device = device)
+            )
+      conv_lstm_results = pd.concat(conv_lstm_results, axis=1).transpose()
+      conv_lstm_results = append_weighted_average(conv_lstm_results)
+      return conv_lstm_results

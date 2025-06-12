@@ -159,6 +159,7 @@ def append_weighted_average(metrics_df: pd.DataFrame):
     weighted_avgs = pd.Series(weighted_avg_metrics).to_frame().transpose()
     weighted_avgs.columns = LABELS
     metrics_df = pd.concat([metrics_df, weighted_avgs], axis=0, ignore_index=True)
+    #metrics_df = metrics_df.drop(labels=['loss'], axis=1)
 
     return metrics_df
 
@@ -180,4 +181,6 @@ def create_metrics_table(metric_dataframes: list):
     new_metrics['prec'] = (metrics.loc[:,'prec0'] + metrics.loc[:,'prec1']) / 2
     new_metrics['rec'] = (metrics.loc[:,'rec0'] + metrics.loc[:,'rec1']) / 2
     new_metrics['f1sc'] = (metrics.loc[:,'f1sc0'] + metrics.loc[:,'f1sc1']) / 2
-    return new_metrics.reset_index(drop=True).sort_values('acc', ascending=False)
+    new_metrics = new_metrics.reset_index(drop=True).sort_values('acc', ascending=False)
+    new_metrics = new_metrics.drop(labels=['loss'], axis=1)
+    return new_metrics

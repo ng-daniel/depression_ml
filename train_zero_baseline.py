@@ -1,20 +1,19 @@
 print("--------------------------------")
-print("DEPRESSION CLASSIFICATION // V.2")
+print("DEPRESSION CLASSIFICATION // V.0")
 print("--------------------------------")
-print("PROCESS: RANDOM FOREST TRAINING")
+print("PROCESS: CONV NN TRAINING")
 print("Importing libraries...")
 
 import os
-import random
 from tqdm import tqdm
+import random
 import pandas as pd
 import torch
 import torch.nn as nn
+import numpy as np
 
-from sklearn.model_selection import GridSearchCV, RandomizedSearchCV
-from sklearn.ensemble import RandomForestClassifier
-from data import apply_smote, preprocess_train_test_dataframes, create_feature_dataframe, create_long_feature_dataframe
-from training_loops import run_random_forest
+from data import apply_smote, preprocess_train_test_dataframes, create_dataloaders
+from training_loops import run_zeroR_baseline
 from eval import create_metrics_table
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -26,9 +25,7 @@ KFOLD_DIR = DATA_DIR + "/kfolds"
 KFOLD_SMOTE_DIR = DATA_DIR + "/kfolds_smote"
 NUM_FOLDS = len(os.listdir(KFOLD_DIR))//2
 RESULTS_DIR = "results"
-
-GRID_SEARCH = True
-USE_FEATURE_SERIES = True
+LONG_FEATURE = True
 
 preprocessing_grid = {
     'resample' : [False, True],
@@ -36,29 +33,22 @@ preprocessing_grid = {
     'scale_range' : [None, (0,1), (-1,1)]
 }
 
-# CHANGE TO RANDOM SEARCH CV
-hyperparameter_grid = {
-    'n_estimators': [100, 200],
-    'max_depth': [None, 10, 20],
-    'min_samples_split': [2, 5],
-    'min_samples_leaf': [1, 2],
-    'bootstrap': [True, False]
-}
-
 preprocessing_settings = {
     'resample' : True,
-    'log_base' : 10,
-    'scale_range' : (-1,1),
+    'log_base' : None,
+    'scale_range' : (0,1),
     'use_standard' : False,
-    'use_gaussian' : 100
+    'use_gaussian' : 30,
+    'batch_size' : 32
 }
 hyperparameter_settings = {
-    'n_estimators': 200,
-    'max_depth': None,
-    'max_features': 'sqrt',
-    'min_samples_split': 2,
-    'min_samples_leaf': 2,
-    'bootstrap': True
+    'learning_rate' : 0.000005,
+    'weight_decay' : 1e-4,
+    'epochs' : 10,
+    'in_shape' : 1,
+    'out_shape' : 1,
+    'hidden_shape' : 32,
+    'flatten_factor' : 720
 }
 
 print("Loading data...")
@@ -67,12 +57,8 @@ print("Loading data...")
 data_directory = RAW_PTH
 kfolds_directory = KFOLD_DIR
 data = pd.read_csv(data_directory, index_col=0)
-
-# create feature series dataframe
-# X_feature_series_df = create_long_feature_dataframe(data.copy().drop('label'))
-# y_feature_series_df = list(data['label'])
 dataframes = []
-for i in tqdm(range(NUM_FOLDS), ncols=50):
+for i in tqdm(range(NUM_FOLDS),ncols=50):
     # extract train/test index names
     train_index = []
     test_index = []
@@ -88,10 +74,10 @@ for i in tqdm(range(NUM_FOLDS), ncols=50):
     X_test = X.drop(labels=train_index, axis=0)
     y_train = list(X_train.pop('label'))
     y_test = list(X_test.pop('label'))
+    
     if preprocessing_settings['resample']:
         # apply smote to training set
         X_train, y_train = apply_smote(X_train, y_train, 0.1)
-
     # preprocess data accordingly for the model
     (X_train, X_test) = preprocess_train_test_dataframes(
                             X_train=X_train,
@@ -101,14 +87,13 @@ for i in tqdm(range(NUM_FOLDS), ncols=50):
                             use_standard=preprocessing_settings['use_standard'],
                             use_gaussian=preprocessing_settings['use_gaussian']
                         )
-    # extract features
-    if USE_FEATURE_SERIES:
-        X_train = create_long_feature_dataframe(X_train)
-        X_test = create_long_feature_dataframe(X_test)
-    else:
-        X_train = create_feature_dataframe(X_train, include_quarter_diff=False)
-        X_test = create_feature_dataframe(X_train, include_quarter_diff=False)
     dataframes.append((X_train, X_test, y_train, y_test))
+
+# augment data for cnn and wrap into dataloaders
+dataloaders = []
+for (X_train, X_test, y_train, y_test) in dataframes:
+    (train_dataloader, test_dataloader) = create_dataloaders(X_train, X_test, y_train, y_test, shuffle=True, batch_size=32)
+    dataloaders.append((train_dataloader, test_dataloader))
 
 # setup output directory, class weights, and loss function, 
 # aka criterion, for model training and evaluation
@@ -119,42 +104,35 @@ class_weights_dict = {
 }
 criterion = nn.BCEWithLogitsLoss(pos_weight=class_weights).to(device)
 
-if GRID_SEARCH:
-    # CHANGE TO RANDOM SEARCH CV
-    print("Performing gridsearch...")
+# if GRID_SEARCH:
     
-    # select a random training dataframe to optimize
-    index = random.randint(0, len(dataframes) - 1)
-    (X_train, _, y_train, _) = dataframes[index]
-    # gridsearch for optimal hyperparameters
-    gridsearch = RandomizedSearchCV(estimator=RandomForestClassifier(),
-                              param_distributions=hyperparameter_grid,
-                              cv=5,
-                              verbose=True)
-    gridsearch.fit(X_train, y_train)
-    print(f"absolute cinema of params: {gridsearch.best_params_}")
-    # set settings to the optimal parameters
-    for param in gridsearch.best_params_:
-        hyperparameter_settings[param] = gridsearch.best_params_[param]
+#     print("Performing gridsearch...")
+#     # select a random training dataframe to optimize
+#     index = random.randint(0, len(dataframes) - 1)
+#     (X_train, _, y_train, _) = dataframes[index]
+#     # gridsearch for optimal hyperparameters
+#     gridsearch = RandomizedSearchCV(estimator=XGBClassifier(),
+#                               param_distributions=hyperparameter_grid,
+#                               n_iter=135,
+#                               cv=2,
+#                               verbose=True)
+#     gridsearch.fit(X_train, y_train)
+#     print(f"absolute cinema of params: {gridsearch.best_params_}")
+#     # set settings to the optimal parameters
+#     for param in gridsearch.best_params_:
+#         hyperparameter_settings[param] = gridsearch.best_params_[param]
 
 print("Evaluating model...")
 
-forest_results = run_random_forest(
-    data=dataframes,
+zeroR_results = run_zeroR_baseline(
+    data=dataloaders,
     criterion=criterion,
     device=device,
-    weights=class_weights_dict,
-    n_estimators=hyperparameter_settings['n_estimators'],
-    max_depth=hyperparameter_settings['max_depth'],
-    max_features=hyperparameter_settings['max_features'],
-    min_samples_split=hyperparameter_settings['min_samples_split'],
-    min_samples_leaf=hyperparameter_settings['min_samples_leaf'],
-    bootstrap=hyperparameter_settings['bootstrap']
 )
-print(forest_results)
+print(zeroR_results)
 print(hyperparameter_settings)
-forest_results.to_csv(os.path.join(RESULTS_DIR, "random_forest.csv"))
-metrics = create_metrics_table([forest_results])
+zeroR_results.to_csv(os.path.join(RESULTS_DIR, "zeroR.csv"))
+metrics = create_metrics_table([zeroR_results])
 print(metrics)
 
 print("Done.")

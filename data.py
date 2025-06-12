@@ -1,12 +1,15 @@
 import os
 import shutil
+import random
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from imblearn.over_sampling import SMOTE
 from scipy.fft import rfft
-from sklearn.preprocessing import MinMaxScaler
-from sklearn.model_selection import train_test_split, KFold
+from scipy.ndimage import gaussian_filter1d
+from sklearn.preprocessing import MinMaxScaler, StandardScaler
+from sklearn.model_selection import StratifiedKFold
 import torch
 from torch.utils.data import Dataset, DataLoader
 
@@ -111,10 +114,10 @@ def load_dataframe_labels(dir_names: list, class_names: list, time: str = None):
 
 def kfolds_dataframes(data: pd.DataFrame, labels: list, numfolds: int, shuffle: bool, random_state: int = None):
     if shuffle:
-        kf = KFold(n_splits=numfolds, shuffle=shuffle, random_state=random_state)
+        kf = StratifiedKFold(n_splits=numfolds, shuffle=shuffle, random_state=random_state)
     else:
-        kf = KFold(n_splits=numfolds, shuffle=shuffle)
-    kf.get_n_splits(data)
+        kf = StratifiedKFold(n_splits=numfolds, shuffle=shuffle)
+    kf.get_n_splits(data, labels)
 
     folds = []
     for i, (train_index, test_index) in enumerate(kf.split(data)):
@@ -128,18 +131,65 @@ def kfolds_dataframes(data: pd.DataFrame, labels: list, numfolds: int, shuffle: 
     
     return folds
 
-def preprocess_train_test_dataframes(X_train: pd.DataFrame, X_test: pd.DataFrame = None, log_base : int = None, scale_range : tuple = None):
+def apply_smote(actigraph_data:pd.DataFrame, actigraph_labels:list, undersample_amount:float):
+    # undersample control class by a set amount
+    print(f"initial amount: {pd.Series(actigraph_labels).value_counts()}")
+    resampled_data = actigraph_data.copy()
+    if undersample_amount > 0:
+        undersample_indices = random.sample(range(actigraph_labels.count(0)), round(actigraph_labels.count(0) * undersample_amount))
+        resampled_data = resampled_data.drop(list(actigraph_data.index[undersample_indices]), axis=0)
+        resampled_labels = [actigraph_labels[i] for i in range(len(actigraph_labels)) if i not in undersample_indices]
+        print(f"undersampled amount: {pd.Series(resampled_labels).value_counts()}")
+    
+    # oversample the condition class to match the control class
+    oversample = SMOTE(sampling_strategy='minority')
+    resampled_index = list(resampled_data.index)
+    resampled_data, resampled_labels = oversample.fit_resample(resampled_data, resampled_labels)
+    
+    # create new index names for the generated samples
+    new_data_count = len(resampled_labels) - len(resampled_index)
+    new_index = [f'1_N_{i}' for i in range(new_data_count)]
+    resampled_data.index = resampled_index + new_index
+    print(f"SMOTE amount: {pd.Series(resampled_labels).value_counts()}")
+
+    return (resampled_data, list(resampled_labels))
+
+def preprocess_train_test_dataframes(
+        X_train: pd.DataFrame, X_test: pd.DataFrame = None, 
+        log_base : int = None, 
+        scale_range : tuple = None, 
+        use_standard = False, 
+        use_gaussian = None,
+    ):
     '''
     Preprocesses
     '''
+    # apply a 1d gaussian filter to each sample
+    if use_gaussian:
+        def gaussian_filter_apply(data:pd.Series):
+            return pd.Series(gaussian_filter1d(data, sigma=use_gaussian))
+        train_index = X_train.index
+        X_train = X_train.apply(gaussian_filter_apply, axis=1)
+        X_train.index = train_index
+        if X_test is not None:
+            test_index = X_test.index
+            X_test = X_test.apply(gaussian_filter_apply, axis=1)
+            X_test.index = test_index
+
     # apply log function to all values
     if log_base:
         X_train = X_train.map(lambda x: log_skip_zeroes(x, log_base))
         X_test = X_test.map(lambda x: log_skip_zeroes(x, log_base)) if X_test is not None else None
     
     # scale data to be within a specific range
-    if scale_range:
-        scaler = MinMaxScaler(scale_range)
+    if scale_range or use_standard:
+        if scale_range:
+            scaler = MinMaxScaler(scale_range)
+            if use_standard:
+                print("preprocess_train_test_dataframes(): use_standard overriden by scale_range minmax scaler")
+        elif use_standard:
+            scaler = StandardScaler()
+
         train_index = X_train.index
         X_train = pd.DataFrame(scaler.fit_transform(X_train))
         X_train.index = train_index
@@ -147,6 +197,8 @@ def preprocess_train_test_dataframes(X_train: pd.DataFrame, X_test: pd.DataFrame
             test_index = X_test.index
             X_test = pd.DataFrame(scaler.transform(X_test))
             X_test.index = test_index
+    
+    
 
     return (X_train, X_test)
 
@@ -199,27 +251,28 @@ def extract_stats_from_window(data: pd.Series, include_quarter_diff = False):
     stats.extend([h_win[1].mean() - h_win[0].mean(), h_win[1].max() - h_win[0].max(), h_win[1].min() - h_win[0].min()])
     
     # calculating quarter window statistics
-    q_win = []
-    for i in range(0, len(data_np), len(data_np)//4):
-        win = data_np[i:i+len(data_np)//4]
-        q_win.append(win)
-    
-    q_means = [win.mean() for win in q_win]
-    q_stds = [win.std() for win in q_win]
-    q_maxs = [win.max() for win in q_win]
-    q_mins = [win.min() for win in q_win]
+    if include_quarter_diff:
+        q_win = []
+        for i in range(0, len(data_np), len(data_np)//4):
+            win = data_np[i:i+len(data_np)//4]
+            q_win.append(win)
+        
+        q_means = [win.mean() for win in q_win]
+        q_stds = [win.std() for win in q_win]
+        q_maxs = [win.max() for win in q_win]
+        q_mins = [win.min() for win in q_win]
 
-    labels.extend([f'q{i}_mean' for i in range(1,len(q_win)+1)])
-    stats.extend(q_means)
-    
-    labels.extend([f'q{i}_std' for i in range(1,len(q_win)+1)])
-    stats.extend(q_stds)
-    
-    labels.extend([f'q{i}_max' for i in range(1,len(q_win)+1)])
-    stats.extend(q_maxs)
-    
-    labels.extend([f'q{i}_min' for i in range(1,len(q_win)+1)])
-    stats.extend(q_mins)
+        labels.extend([f'q{i}_mean' for i in range(1,len(q_win)+1)])
+        stats.extend(q_means)
+        
+        labels.extend([f'q{i}_std' for i in range(1,len(q_win)+1)])
+        stats.extend(q_stds)
+        
+        labels.extend([f'q{i}_max' for i in range(1,len(q_win)+1)])
+        stats.extend(q_maxs)
+        
+        labels.extend([f'q{i}_min' for i in range(1,len(q_win)+1)])
+        stats.extend(q_mins)
 
     # calculate difference in quarter statistics
     if include_quarter_diff:
@@ -285,20 +338,36 @@ def reset_feature_series(num_folds: int):
 def export_kfolds_split_indices(data: pd.DataFrame, labels: list, export_dir: str, n_splits: int, shuffle: bool, random_state: int = None):
     '''
     Splits data into N folds, writing each fold to a directory as a text file.
-
     '''
-    kf = KFold(n_splits=n_splits, 
+
+    # extracts all individual subject labels from data index
+    sample_names = list(data.index)
+    subject_names = list(dict.fromkeys(['_'.join(name.split(sep='_')[0:2]) for name in sample_names]))
+    subject_labels = [int(name[0]) for name in subject_names]
+
+    print(subject_names)
+    print(len(subject_names))
+    print(subject_labels)
+    print(len(subject_labels))
+
+    print(subject_names)
+
+    kf = StratifiedKFold(n_splits=n_splits, 
                shuffle=shuffle, 
                random_state=random_state)
-    kf.get_n_splits(data)
 
-    for i, (train_index, test_index) in enumerate(kf.split(data)):
+    for i, (train_index, test_index) in enumerate(kf.split(subject_names, subject_labels)):
+        
+        train_subjects = [name for i, name in enumerate(subject_names) if i in train_index]
+        train_names = []
+        for subject_name in train_subjects:
+            train_names += [name for name in sample_names if (subject_name + '_') in name]
+        
+        test_subjects = [name for i, name in enumerate(subject_names) if i in test_index]
+        test_names = []
+        for subject_name in test_subjects:
+            test_names += [name for name in sample_names if (subject_name + '_') in name]
 
-        X_train = data.iloc[train_index]
-        X_test = data.iloc[test_index]
-
-        train_names = list(X_train.index)
-        test_names = list(X_test.index)
         train_filename = f"fold{i}t.txt"
         test_filename = f"fold{i}e.txt"   
 

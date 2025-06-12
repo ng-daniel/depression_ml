@@ -32,7 +32,8 @@ class LSTM(nn.Module):
         # print(x.shape)
         x, (hn, cn) = self.lstm(x, (h0, c0))
         # print(f"{x.shape} | {hn.shape} | {cn.shape}")
-        x = self.fc(x[:, -1, :])
+        x = x[:, -1, :]
+        x = self.fc()
         # print(x.shape)
         return x
 
@@ -47,6 +48,7 @@ class ConvNN(nn.Module):
         super().__init__()
         self.conv_block_1 = nn.Sequential(
             nn.Conv1d(in_shape, hidden_shape, kernel_size=3, padding = 1),
+            nn.BatchNorm1d(hidden_shape),
             nn.ReLU(),
             nn.Conv1d(hidden_shape, hidden_shape, kernel_size=3, padding = 1),
             nn.ReLU(),
@@ -114,26 +116,17 @@ class LSTM_Feature(nn.Module):
         
         # N * 1 * L * in_shape
         # hidden shape = number of Long term memory values
-        self.lstm = nn.LSTM(self.num_features, hidden_shape, lstm_layers, batch_first=True, dropout=0.1)
+        self.lstm = nn.LSTM(self.num_features, hidden_shape, lstm_layers, batch_first=True)
         self.fc = nn.Sequential(
-            nn.Linear(hidden_shape, hidden_shape),
-            nn.ReLU(),
-            nn.Dropout(p=0.5),
+            nn.Dropout(p=0.3),
             nn.Linear(hidden_shape, out_shape)
         )
     def forward(self, x):
-        # number of LSTM layers * L * hidden shape
-        h0 = torch.zeros(self.lstm_layers, 
-                         x.size(0), 
-                         self.hidden_shape).to(x.device)
-        c0 = torch.zeros(self.lstm_layers, 
-                         x.size(0), 
-                         self.hidden_shape).to(x.device)
         x = torch.reshape(x, (x.size(0), self.seq_len, self.num_features))
-        x, _ = self.lstm(x, (h0, c0))
-        # print(f"{x.shape} | {hn.shape} | {cn.shape}")
-        x = self.fc(x[:, -1, :])
-        # print(x.shape)
+        x, _ = self.lstm(x)
+        x = x.mean(dim=1)
+        # x = x[:, -1, :]
+        x = self.fc(x)
         return x
     
 class ConvLSTM(nn.Module):
@@ -144,41 +137,37 @@ class ConvLSTM(nn.Module):
         self.out_shape = out_shape
         self.hidden_shape = hidden_shape
         self.lstm_layers = lstm_layers
+        self.conv_hidden = 32
         
         self.conv_block = nn.Sequential(
-            nn.Conv1d(1, 32, kernel_size=5, padding=2),
+            nn.Conv1d(1, self.conv_hidden, kernel_size=3, padding=1),
+            nn.BatchNorm1d(self.conv_hidden),
             nn.ReLU(),
             nn.MaxPool1d(2),
 
-            nn.Conv1d(32, 64, kernel_size=5, padding=2),
+            nn.Conv1d(self.conv_hidden, self.conv_hidden * 2, kernel_size=3, padding=1),
+            nn.BatchNorm1d(self.conv_hidden * 2),
             nn.ReLU(),
             nn.MaxPool1d(2),
 
-            nn.Conv1d(64, 128, kernel_size=3, padding=1),
+            nn.Conv1d(self.conv_hidden * 2, self.conv_hidden * 4, kernel_size=3, padding=1),
+            nn.BatchNorm1d(self.conv_hidden * 4),
             nn.ReLU(),
-            nn.MaxPool1d(2)    
+            nn.MaxPool1d(2),
         )
-        self.lstm = nn.LSTM(hidden_shape, 
+        self.lstm = nn.LSTM(self.conv_hidden * 4, 
                             hidden_shape, 
                             lstm_layers, 
                             batch_first=True)
         self.fc = nn.Sequential(
-            nn.Linear(hidden_shape, hidden_shape),
-            nn.ReLU(),
+            nn.BatchNorm1d(hidden_shape),
             nn.Dropout(p=0.5),
             nn.Linear(hidden_shape, out_shape)
         )
     def forward(self, x):
-        h0 = torch.zeros(self.lstm_layers, 
-                         x.size(0), 
-                         self.hidden_shape).to(x.device)
-        c0 = torch.zeros(self.lstm_layers, 
-                         x.size(0), 
-                         self.hidden_shape).to(x.device)
-        
         x = self.conv_block(x)
         x = x.permute((0,2,1))
-        x, _ = self.lstm(x, (h0, c0))
-        x = self.fc(x[:, -1, :])
-
+        x, _ = self.lstm(x)
+        x = x[:,-1,:]
+        x = self.fc(x)
         return x

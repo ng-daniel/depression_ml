@@ -1,7 +1,7 @@
 print("--------------------------------")
 print("DEPRESSION CLASSIFICATION // V.0")
 print("--------------------------------")
-print("PROCESS: XGBOOST TRAINING")
+print("PROCESS: LSTM V2 TRAINING")
 print("Importing libraries...")
 
 import os
@@ -14,8 +14,8 @@ import numpy as np
 
 from sklearn.model_selection import RandomizedSearchCV
 from xgboost import XGBClassifier
-from data import apply_smote, preprocess_train_test_dataframes, create_feature_dataframe, create_long_feature_dataframe
-from training_loops import run_XGBoost
+from data import apply_smote, preprocess_train_test_dataframes, create_feature_dataframe, create_long_feature_dataframe, create_dataloaders
+from training_loops import run_lstm_feature
 from eval import create_metrics_table
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -27,7 +27,7 @@ KFOLD_DIR = DATA_DIR + "/kfolds"
 KFOLD_SMOTE_DIR = DATA_DIR + "/kfolds_smote"
 NUM_FOLDS = len(os.listdir(KFOLD_DIR))//2
 RESULTS_DIR = "results"
-GRID_SEARCH = False
+GRID_SEARCH = True
 LONG_FEATURE = True
 
 preprocessing_grid = {
@@ -36,24 +36,28 @@ preprocessing_grid = {
     'scale_range' : [None, (0,1), (-1,1)]
 }
 hyperparameter_grid = {
-    'min_child_weight' : [1, 5, 10],
-    'subsample' : [0.6, 0.8, 1],
-    'colsample_bytree' : [0.6, 0.8, 1],
+    'learning_rate' : [0.00025],
+    'epochs' : [200],
+    'out_shape' : [1],
+    'hidden_shape' : [16],
+    'lstm_layers' : [8]
 }
 
 preprocessing_settings = {
     'resample' : True,
-    'log_base' : 10,
+    'log_base' : None,
     'scale_range' : (0,1),
     'use_standard' : False,
-    'use_gaussian' : None
+    'use_gaussian' : None,
+    'window_size' : 30
 }
 hyperparameter_settings = {
-    'max_depth' : 6,
-    'min_child_weight' : 1,
-    'subsample' : 1,
-    'colsample_bytree' : 1,
-    'learning_rate' : 0.1
+    'learning_rate' : 0.0005,
+    'weight_decay' : 1e-4,
+    'epochs' : 50,
+    'out_shape' : 1,
+    'hidden_shape' : 64,
+    'lstm_layers' : 8
 }
 
 print("Loading data...")
@@ -93,12 +97,23 @@ for i in tqdm(range(NUM_FOLDS),ncols=50):
                         )
     # extract features
     if LONG_FEATURE:
-        X_train = create_long_feature_dataframe(X_train, window_size=60, include_quarter_diff=False)
-        X_test = create_long_feature_dataframe(X_test, window_size=60, include_quarter_diff=False)
+        X_train = create_long_feature_dataframe(X_train, 
+                                                window_size=preprocessing_settings['window_size'],
+                                                include_quarter_diff=False)
+        X_test = create_long_feature_dataframe(X_test, 
+                                               window_size=preprocessing_settings['window_size'],
+                                               include_quarter_diff=False)
+        print(X_train)
     else:
         X_train = create_feature_dataframe(X_train, True)
         X_test = create_feature_dataframe(X_test, True)
     dataframes.append((X_train, X_test, y_train, y_test))
+
+# augment data for LSTM v2 and wrap into dataloaders
+dataloaders = []
+for (X_train, X_test, y_train, y_test) in dataframes:
+    (train_dataloader, test_dataloader) = create_dataloaders(X_train, X_test, y_train, y_test, shuffle=True, batch_size=32)
+    dataloaders.append((train_dataloader, test_dataloader))
 
 # setup output directory, class weights, and loss function, 
 # aka criterion, for model training and evaluation
@@ -108,42 +123,45 @@ class_weights_dict = {
       1 : class_weights.item()
 }
 criterion = nn.BCEWithLogitsLoss(pos_weight=class_weights).to(device)
+NUM_FEATURES = len(dataframes[0][0].columns)
 
-if GRID_SEARCH:
+# if GRID_SEARCH:
     
-    print("Performing gridsearch...")
-    # select a random training dataframe to optimize
-    index = random.randint(0, len(dataframes) - 1)
-    (X_train, _, y_train, _) = dataframes[index]
-    # gridsearch for optimal hyperparameters
-    gridsearch = RandomizedSearchCV(estimator=XGBClassifier(),
-                              param_distributions=hyperparameter_grid,
-                              n_iter=135,
-                              cv=2,
-                              verbose=True)
-    gridsearch.fit(X_train, y_train)
-    print(f"absolute cinema of params: {gridsearch.best_params_}")
-    # set settings to the optimal parameters
-    for param in gridsearch.best_params_:
-        hyperparameter_settings[param] = gridsearch.best_params_[param]
+#     print("Performing gridsearch...")
+#     # select a random training dataframe to optimize
+#     index = random.randint(0, len(dataframes) - 1)
+#     (X_train, _, y_train, _) = dataframes[index]
+#     # gridsearch for optimal hyperparameters
+#     gridsearch = RandomizedSearchCV(estimator=XGBClassifier(),
+#                               param_distributions=hyperparameter_grid,
+#                               n_iter=135,
+#                               cv=2,
+#                               verbose=True)
+#     gridsearch.fit(X_train, y_train)
+#     print(f"absolute cinema of params: {gridsearch.best_params_}")
+#     # set settings to the optimal parameters
+#     for param in gridsearch.best_params_:
+#         hyperparameter_settings[param] = gridsearch.best_params_[param]
 
 print("Evaluating model...")
 
-xgb_results = run_XGBoost(
-    data=dataframes,
-    learning_rate=hyperparameter_settings['learning_rate'],
+lstm_v2_results = run_lstm_feature(
+    data=dataloaders,
     criterion=criterion,
     device=device,
-    weights=class_weights_dict,
-    max_depth=hyperparameter_settings['max_depth'],
-    min_child_weight = hyperparameter_settings['min_child_weight'],
-    subsample = hyperparameter_settings['subsample'],
-    colsample_bytree = hyperparameter_settings['colsample_bytree']
+    learning_rate=hyperparameter_settings['learning_rate'],
+    weight_decay=hyperparameter_settings['weight_decay'],
+    epochs=hyperparameter_settings['epochs'],
+    in_shape=NUM_FEATURES,
+    out_shape=hyperparameter_settings['out_shape'],
+    hidden_shape=hyperparameter_settings['hidden_shape'],
+    lstm_layers=hyperparameter_settings['lstm_layers'],
+    window_size=preprocessing_settings['window_size']
 )
-print(xgb_results)
+print(lstm_v2_results)
 print(hyperparameter_settings)
-xgb_results.to_csv(os.path.join(RESULTS_DIR, "xgb.csv"))
-metrics = create_metrics_table([xgb_results])
+lstm_v2_results.to_csv(os.path.join(RESULTS_DIR, "lstm_v2.csv"))
+metrics = create_metrics_table([lstm_v2_results])
 print(metrics)
 
 print("Done.")
