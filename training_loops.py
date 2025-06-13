@@ -169,7 +169,7 @@ def run_cnn(data: list, criterion, device, learning_rate, epochs, in_shape, out_
             optimizer = torch.optim.Adam(params = model_0.parameters(), lr=learning_rate)
             # train model
             train_test(model_0, train_dataloader, test_dataloader, epochs = epochs, optimizer=optimizer, 
-                  criterion=criterion, device=device, verbose=True)
+                  criterion=criterion, device=device, verbose=False)
             cnn_results.append(
                   eval_model(model = model_0,
                         note = f"{i}",
@@ -247,7 +247,7 @@ def run_conv_lstm(data: list, criterion, device, learning_rate, weight_decay, ep
             optimizer = torch.optim.AdamW(params = model_3.parameters(), lr=learning_rate, weight_decay=weight_decay)
             # train model
             train_test(model_3, train_dataloader, test_dataloader, epochs = epochs, optimizer=optimizer, 
-                  criterion=criterion, device=device, verbose=True)
+                  criterion=criterion, device=device, verbose=False)
             conv_lstm_results.append(
                   eval_model(model = model_3,
                         note = f"{i}",

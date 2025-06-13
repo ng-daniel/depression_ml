@@ -3,7 +3,7 @@ import random
 import matplotlib.pyplot as plt
 from data import preprocess_train_test_dataframes
 
-data = pd.read_csv("data/processed_dataframes/data_resampled.csv", index_col=0)
+data = pd.read_csv("data/processed_dataframes/data_raw.csv", index_col=0)
 data_control = data[data['label'] == 0].copy()
 data_condition = data[data['label'] == 1].copy()
 
@@ -85,14 +85,15 @@ def plot_random_samples(data_control:pd.DataFrame, data_condition:pd.DataFrame, 
 (processed_data, _) = preprocess_train_test_dataframes(
     X_train=data.drop(labels=['label'], axis=1),
     log_base=None,
-    scale_range=None,
+    scale_range=(0,1),
     use_gaussian=30,
-    use_standard=False
+    use_standard=False,
+    subtract_mean=True
 )
 processed_data['label'] = data['label']
 data_control = processed_data[processed_data['label'] == 0].copy()
 data_condition = processed_data[processed_data['label'] == 1].copy()
-plot_random_samples(data_control.drop(labels=['label'], axis=1), data_condition.drop(labels=['label'], axis=1), 100)
+plot_random_samples(data_control.drop(labels=['label'], axis=1), data_condition.drop(labels=['label'], axis=1), 50)
 data_mean_trend_plot(data_control=data_control, 
                      data_condition=data_condition, 
                      stat='mean',

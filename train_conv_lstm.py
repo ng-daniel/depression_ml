@@ -131,23 +131,30 @@ NUM_FEATURES = len(dataframes[0][0].columns)
 #         hyperparameter_settings[param] = gridsearch.best_params_[param]
 
 print("Evaluating model...")
-
-conv_lstm_results = run_conv_lstm(
-    data=dataloaders,
-    criterion=criterion,
-    device=device,
-    learning_rate=hyperparameter_settings['learning_rate'],
-    weight_decay=hyperparameter_settings['weight_decay'],
-    epochs=hyperparameter_settings['epochs'],
-    in_shape=NUM_FEATURES,
-    out_shape=hyperparameter_settings['out_shape'],
-    hidden_shape=hyperparameter_settings['hidden_shape'],
-    lstm_layers=hyperparameter_settings['lstm_layers'],
-)
-print(conv_lstm_results)
-print(hyperparameter_settings)
-conv_lstm_results.to_csv(os.path.join(RESULTS_DIR, "conv_lstm.csv"))
-metrics = create_metrics_table([conv_lstm_results])
+conv_lstm_results_list = []
+for i in tqdm(range(20), ncols=50):
+    conv_lstm_results = run_conv_lstm(
+        data=dataloaders,
+        criterion=criterion,
+        device=device,
+        learning_rate=hyperparameter_settings['learning_rate'],
+        weight_decay=hyperparameter_settings['weight_decay'],
+        epochs=hyperparameter_settings['epochs'],
+        in_shape=NUM_FEATURES,
+        out_shape=hyperparameter_settings['out_shape'],
+        hidden_shape=hyperparameter_settings['hidden_shape'],
+        lstm_layers=hyperparameter_settings['lstm_layers'],
+    )
+    conv_lstm_results_list.append(conv_lstm_results)
+# print(conv_lstm_results)
+# print(hyperparameter_settings)
+# conv_lstm_results.to_csv(os.path.join(RESULTS_DIR, "conv_lstm.csv"))
+metrics = create_metrics_table(conv_lstm_results_list)
+metrics.to_csv(os.path.join(RESULTS_DIR, "conv_lstm_20_runs_metrics.csv"))
 print(metrics)
+print(metrics['acc'].mean())
+print(metrics['acc'].std())
+print(metrics['f1sc'].mean())
+print(metrics['f1sc'].std())
 
 print("Done.")

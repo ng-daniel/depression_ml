@@ -160,6 +160,7 @@ def preprocess_train_test_dataframes(
         scale_range : tuple = None, 
         use_standard = False, 
         use_gaussian = None,
+        subtract_mean = True,
     ):
     '''
     Preprocesses
@@ -198,7 +199,13 @@ def preprocess_train_test_dataframes(
             X_test = pd.DataFrame(scaler.transform(X_test))
             X_test.index = test_index
     
-    
+    # subtract mean of training control samples from all samples
+    if subtract_mean:
+        train_control_indices = [x for x in X_train.index if int(x[0]) == 0]
+        train_control_mean = X_train.loc[train_control_indices].values.mean()
+        X_train = X_train.map(lambda x : x - train_control_mean)
+        if X_test is not None:
+            X_test = X_test.map(lambda x : x - train_control_mean)
 
     return (X_train, X_test)
 

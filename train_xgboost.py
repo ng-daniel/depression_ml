@@ -44,9 +44,9 @@ hyperparameter_grid = {
 preprocessing_settings = {
     'resample' : True,
     'log_base' : 10,
-    'scale_range' : (0,1),
+    'scale_range' : (-1,1),
     'use_standard' : False,
-    'use_gaussian' : None
+    'use_gaussian' : 100
 }
 hyperparameter_settings = {
     'max_depth' : 6,
@@ -93,8 +93,8 @@ for i in tqdm(range(NUM_FOLDS),ncols=50):
                         )
     # extract features
     if LONG_FEATURE:
-        X_train = create_long_feature_dataframe(X_train, window_size=60, include_quarter_diff=False)
-        X_test = create_long_feature_dataframe(X_test, window_size=60, include_quarter_diff=False)
+        X_train = create_long_feature_dataframe(X_train, window_size=30, include_quarter_diff=False)
+        X_test = create_long_feature_dataframe(X_test, window_size=30, include_quarter_diff=False)
     else:
         X_train = create_feature_dataframe(X_train, True)
         X_test = create_feature_dataframe(X_test, True)
