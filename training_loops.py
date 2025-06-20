@@ -221,7 +221,7 @@ def run_lstm_feature(data: list, criterion, device, learning_rate, weight_decay,
             optimizer = torch.optim.AdamW(params = model_3.parameters(), lr=learning_rate, weight_decay=weight_decay)
             # train model
             train_test(model_3, train_dataloader, test_dataloader, epochs = epochs, optimizer=optimizer, 
-                  criterion=criterion, device=device, verbose=True)
+                  criterion=criterion, device=device, verbose=False)
             lstm_series_results.append(
                   eval_model(model = model_3,
                         note = f"{i}",

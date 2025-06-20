@@ -16,7 +16,7 @@ from sklearn.model_selection import RandomizedSearchCV
 from xgboost import XGBClassifier
 from data import apply_smote, preprocess_train_test_dataframes, create_feature_dataframe, create_long_feature_dataframe, create_dataloaders
 from training_loops import run_lstm_feature
-from eval import create_metrics_table
+from eval import create_metrics_table, combine_several_weighted_averages
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -46,15 +46,16 @@ hyperparameter_grid = {
 preprocessing_settings = {
     'resample' : True,
     'log_base' : None,
-    'scale_range' : (0,1),
-    'use_standard' : False,
-    'use_gaussian' : None,
+    'scale_range' : None,
+    'use_standard' : True,
+    'use_gaussian' : 50,
+    'adjust_seasonality' : False,
     'window_size' : 30
 }
 hyperparameter_settings = {
-    'learning_rate' : 0.0005,
+    'learning_rate' : 0.00005,
     'weight_decay' : 1e-4,
-    'epochs' : 50,
+    'epochs' : 100,
     'out_shape' : 1,
     'hidden_shape' : 64,
     'lstm_layers' : 8
@@ -90,19 +91,16 @@ for i in tqdm(range(NUM_FOLDS),ncols=50):
     (X_train, X_test) = preprocess_train_test_dataframes(
                             X_train=X_train,
                             X_test=X_test,
-                            log_base=preprocessing_settings['log_base'],
-                            scale_range=preprocessing_settings['scale_range'],
-                            use_standard=preprocessing_settings['use_standard'],
-                            use_gaussian=preprocessing_settings['use_gaussian']
+                            settings=preprocessing_settings
                         )
     # extract features
     if LONG_FEATURE:
         X_train = create_long_feature_dataframe(X_train, 
                                                 window_size=preprocessing_settings['window_size'],
-                                                include_quarter_diff=False)
+                                                include_quarter_diff=False, simple_stats=True)
         X_test = create_long_feature_dataframe(X_test, 
                                                window_size=preprocessing_settings['window_size'],
-                                               include_quarter_diff=False)
+                                               include_quarter_diff=False, simple_stats=True)
         print(X_train)
     else:
         X_train = create_feature_dataframe(X_train, True)
@@ -117,7 +115,7 @@ for (X_train, X_test, y_train, y_test) in dataframes:
 
 # setup output directory, class weights, and loss function, 
 # aka criterion, for model training and evaluation
-class_weights = torch.tensor([1]).to(device)
+class_weights = torch.tensor([1.1]).to(device)
 class_weights_dict = {
       0 : 1,
       1 : class_weights.item()
@@ -145,23 +143,25 @@ NUM_FEATURES = len(dataframes[0][0].columns)
 
 print("Evaluating model...")
 
-lstm_v2_results = run_lstm_feature(
-    data=dataloaders,
-    criterion=criterion,
-    device=device,
-    learning_rate=hyperparameter_settings['learning_rate'],
-    weight_decay=hyperparameter_settings['weight_decay'],
-    epochs=hyperparameter_settings['epochs'],
-    in_shape=NUM_FEATURES,
-    out_shape=hyperparameter_settings['out_shape'],
-    hidden_shape=hyperparameter_settings['hidden_shape'],
-    lstm_layers=hyperparameter_settings['lstm_layers'],
-    window_size=preprocessing_settings['window_size']
-)
-print(lstm_v2_results)
-print(hyperparameter_settings)
-lstm_v2_results.to_csv(os.path.join(RESULTS_DIR, "lstm_v2.csv"))
-metrics = create_metrics_table([lstm_v2_results])
+lstm_v2_results_list = []
+for i in tqdm(range(20), ncols=50):
+    lstm_v2_results = run_lstm_feature(
+        data=dataloaders,
+        criterion=criterion,
+        device=device,
+        learning_rate=hyperparameter_settings['learning_rate'],
+        weight_decay=hyperparameter_settings['weight_decay'],
+        epochs=hyperparameter_settings['epochs'],
+        in_shape=NUM_FEATURES,
+        out_shape=hyperparameter_settings['out_shape'],
+        hidden_shape=hyperparameter_settings['hidden_shape'],
+        lstm_layers=hyperparameter_settings['lstm_layers'],
+        window_size=preprocessing_settings['window_size']
+    )
+    lstm_v2_results_list.append(lstm_v2_results)
+    print(lstm_v2_results)
+metrics = combine_several_weighted_averages(lstm_v2_results_list)
+metrics.to_csv(os.path.join(RESULTS_DIR, "lstm_v2_20_metrics.csv"))
 print(metrics)
 
 print("Done.")

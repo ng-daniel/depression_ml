@@ -26,8 +26,9 @@ KFOLD_DIR = DATA_DIR + "/kfolds"
 KFOLD_SMOTE_DIR = DATA_DIR + "/kfolds_smote"
 NUM_FOLDS = len(os.listdir(KFOLD_DIR))//2
 RESULTS_DIR = "results"
+LONG_FEATURE = True
 
-GRID_SEARCH = True
+GRID_SEARCH = False
 USE_FEATURE_SERIES = True
 
 preprocessing_grid = {
@@ -46,19 +47,22 @@ hyperparameter_grid = {
 }
 
 preprocessing_settings = {
-    'resample' : True,
-    'log_base' : 10,
-    'scale_range' : (-1,1),
-    'use_standard' : False,
-    'use_gaussian' : 100
+    'resample' : False,
+    'log_base' : None,
+    'scale_range' : None,
+    'use_standard' : True,
+    'use_gaussian' : None,
+    'subtract_mean' : False,
+    'adjust_seasonality' : False,
+    'window_size' : 30
 }
 hyperparameter_settings = {
-    'n_estimators': 200,
+    'n_estimators': 100,
     'max_depth': None,
     'max_features': 'sqrt',
     'min_samples_split': 2,
     'min_samples_leaf': 2,
-    'bootstrap': True
+    'bootstrap': False
 }
 
 print("Loading data...")
@@ -96,18 +100,21 @@ for i in tqdm(range(NUM_FOLDS), ncols=50):
     (X_train, X_test) = preprocess_train_test_dataframes(
                             X_train=X_train,
                             X_test=X_test,
-                            log_base=preprocessing_settings['log_base'],
-                            scale_range=preprocessing_settings['scale_range'],
-                            use_standard=preprocessing_settings['use_standard'],
-                            use_gaussian=preprocessing_settings['use_gaussian']
+                            settings=preprocessing_settings
                         )
     # extract features
-    if USE_FEATURE_SERIES:
-        X_train = create_long_feature_dataframe(X_train)
-        X_test = create_long_feature_dataframe(X_test)
+    if LONG_FEATURE:
+        X_train = create_long_feature_dataframe(X_train, 
+                                                window_size=preprocessing_settings['window_size'],
+                                                include_quarter_diff=False,
+                                                simple_stats=True)
+        X_test = create_long_feature_dataframe(X_test, 
+                                               window_size=preprocessing_settings['window_size'],
+                                               include_quarter_diff=False,
+                                               simple_stats=True)
     else:
-        X_train = create_feature_dataframe(X_train, include_quarter_diff=False)
-        X_test = create_feature_dataframe(X_train, include_quarter_diff=False)
+        X_train = create_feature_dataframe(X_train, include_quarter_diff=False, simple_stats=True)
+        X_test = create_feature_dataframe(X_test, include_quarter_diff=False, simple_stats=True)
     dataframes.append((X_train, X_test, y_train, y_test))
 
 # setup output directory, class weights, and loss function, 

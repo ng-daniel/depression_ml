@@ -163,6 +163,23 @@ def append_weighted_average(metrics_df: pd.DataFrame):
 
     return metrics_df
 
+def combine_several_weighted_averages(metric_dataframes: list):
+    wt_avg_list = []
+    for i, df in enumerate(metric_dataframes):
+        wt_avg = df[df['note'] == 'wt_avg']
+        wt_avg['note'] = f'{i+1}_wt_avg'
+        wt_avg_list.append(wt_avg)
+    new_df = pd.concat(wt_avg_list, axis=0)
+
+    new_df_means = new_df.iloc[-1].copy()
+    new_df_means['note'] = 'wt_avg'
+    for col in ['loss', 'acc', 'prec0', 'prec1', 'rec0', 'rec1', 'f1sc0', 'f1sc1']:
+        new_df_means.loc[col] = new_df[col].mean()
+    print(new_df)
+    print(new_df_means)
+    new_df = pd.concat([new_df, pd.DataFrame(new_df_means).transpose()], axis=0)
+    return new_df
+
 def create_metrics_table(metric_dataframes: list):
     '''
     Averages the class specific metrics for each model type, and aggregates

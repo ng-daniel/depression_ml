@@ -16,7 +16,7 @@ from sklearn.model_selection import RandomizedSearchCV
 from xgboost import XGBClassifier
 from data import apply_smote, preprocess_train_test_dataframes, create_feature_dataframe, create_long_feature_dataframe, create_dataloaders
 from training_loops import run_conv_lstm
-from eval import create_metrics_table
+from eval import create_metrics_table, combine_several_weighted_averages
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -42,18 +42,27 @@ hyperparameter_grid = {
     'lstm_layers' : [8]
 }
 
+# preprocessing_settings = {
+#     'resample' : True,
+#     'log_base' : None,
+#     'scale_range' : (0,1),
+#     'use_standard' : False,
+#     'use_gaussian' : 30,
+#     'batch_size' : 32
+# }
 preprocessing_settings = {
     'resample' : True,
     'log_base' : None,
-    'scale_range' : (0,1),
-    'use_standard' : False,
-    'use_gaussian' : 30,
+    'scale_range' : None,
+    'use_standard' : True,
+    'use_gaussian' : 50,
+    'adjust_seasonality' : False,
     'batch_size' : 32
 }
 hyperparameter_settings = {
     'learning_rate' : 0.00005,
     'weight_decay' : 1e-4,
-    'epochs' : 50,
+    'epochs' : 75,
     'out_shape' : 1,
     'hidden_shape' : 64,
     'lstm_layers' : 8
@@ -146,15 +155,9 @@ for i in tqdm(range(20), ncols=50):
         lstm_layers=hyperparameter_settings['lstm_layers'],
     )
     conv_lstm_results_list.append(conv_lstm_results)
-# print(conv_lstm_results)
-# print(hyperparameter_settings)
-# conv_lstm_results.to_csv(os.path.join(RESULTS_DIR, "conv_lstm.csv"))
-metrics = create_metrics_table(conv_lstm_results_list)
-metrics.to_csv(os.path.join(RESULTS_DIR, "conv_lstm_20_runs_metrics.csv"))
+    print(conv_lstm_results)
+metrics = combine_several_weighted_averages(conv_lstm_results_list)
+metrics.to_csv(os.path.join(RESULTS_DIR, "conv_lstm_20_metrics.csv"))
 print(metrics)
-print(metrics['acc'].mean())
-print(metrics['acc'].std())
-print(metrics['f1sc'].mean())
-print(metrics['f1sc'].std())
 
 print("Done.")

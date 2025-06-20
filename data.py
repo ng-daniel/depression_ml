@@ -8,12 +8,13 @@ import pandas as pd
 from imblearn.over_sampling import SMOTE
 from scipy.fft import rfft
 from scipy.ndimage import gaussian_filter1d
+from scipy.stats import skew, kurtosis
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
 from sklearn.model_selection import StratifiedKFold
 import torch
 from torch.utils.data import Dataset, DataLoader
 
-from util import log_skip_zeroes
+from util import log_skip_zeroes, data_mean_med_std, subtract_corresponding_minute
 
 CONDITION_SIZE = 23
 CONTROL_SIZE = 32
@@ -160,15 +161,33 @@ def preprocess_train_test_dataframes(
         scale_range : tuple = None, 
         use_standard = False, 
         use_gaussian = None,
-        subtract_mean = True,
+        subtract_mean = False,
+        adjust_seasonality = False,
+        settings : dict = None
     ):
     '''
     Preprocesses
     '''
+    # use settings instead if available
+    if settings is not None:
+        key = settings.keys()
+        log_base = settings['log_base'] if 'log_base' in key else log_base
+        scale_range = settings['scale_range'] if 'scale_range' in key else scale_range
+        use_standard = settings['use_standard'] if 'use_standard' in key else use_standard
+        use_gaussian = settings['use_gaussian'] if 'use_gaussian' in key else use_gaussian
+        subtract_mean = settings['subtract_mean'] if 'subtract_mean' in key else subtract_mean
+        adjust_seasonality = settings['adjust_seasonality'] if 'adjust_seasonality' in key else adjust_seasonality
+
+    # apply log function to all values
+    if log_base:
+        X_train = X_train.map(lambda x: log_skip_zeroes(x, log_base))
+        X_test = X_test.map(lambda x: log_skip_zeroes(x, log_base)) if X_test is not None else None
+
     # apply a 1d gaussian filter to each sample
     if use_gaussian:
         def gaussian_filter_apply(data:pd.Series):
             return pd.Series(gaussian_filter1d(data, sigma=use_gaussian))
+        
         train_index = X_train.index
         X_train = X_train.apply(gaussian_filter_apply, axis=1)
         X_train.index = train_index
@@ -176,13 +195,8 @@ def preprocess_train_test_dataframes(
             test_index = X_test.index
             X_test = X_test.apply(gaussian_filter_apply, axis=1)
             X_test.index = test_index
-
-    # apply log function to all values
-    if log_base:
-        X_train = X_train.map(lambda x: log_skip_zeroes(x, log_base))
-        X_test = X_test.map(lambda x: log_skip_zeroes(x, log_base)) if X_test is not None else None
     
-    # scale data to be within a specific range
+    # scale data to be within a specific range, either with minmax scaling or z score scaling
     if scale_range or use_standard:
         if scale_range:
             scaler = MinMaxScaler(scale_range)
@@ -198,7 +212,25 @@ def preprocess_train_test_dataframes(
             test_index = X_test.index
             X_test = pd.DataFrame(scaler.transform(X_test))
             X_test.index = test_index
-    
+
+    # calculate seasonality on training data and subtract from all samples
+    if adjust_seasonality:
+        time_index = [ x for x in range(1440)]
+        train_means = X_train.apply(data_mean_med_std, axis=0).loc['mean']
+        degree = 20
+        coef = np.polyfit(time_index, train_means, degree)
+
+        curve = []
+        for i in range(len(time_index)):
+            val = coef[-1]
+            for d in range(degree):
+                val += time_index[i]**(degree-d)*coef[d]
+            curve.append(val)
+
+        X_train = X_train.apply(subtract_corresponding_minute, axis=1, args=(curve,))
+        if X_test is not None:
+            X_test = X_test.apply(subtract_corresponding_minute, axis=1, args=(curve,))
+
     # subtract mean of training control samples from all samples
     if subtract_mean:
         train_control_indices = [x for x in X_train.index if int(x[0]) == 0]
@@ -229,7 +261,7 @@ def create_dataloaders(X_train: pd.DataFrame, X_test: pd.DataFrame, y_train: lis
 
     return (train_dataloader, test_dataloader)
 
-def extract_stats_from_window(data: pd.Series, include_quarter_diff = False):
+def extract_stats_from_window(data: pd.Series, include_quarter_diff = False, simple_stats = False):
     '''
     Extracts stats from a window of actigraph data (total of ):
         - Sample Mean, Sample Std. Dev., Sample Skewness, Sample Kurtosis, Max, Min (6)
@@ -249,16 +281,16 @@ def extract_stats_from_window(data: pd.Series, include_quarter_diff = False):
     labels = []
 
     # loading descriptive statistics
-    labels.extend(['mean', 'std', 'max', 'min'])
+    labels.extend(['mean', 'std',  'max', 'min'])
     stats.extend([data_np.mean(), data_np.std(), data_np.max(), data_np.min()])
-    
-    # calculating half window statistics
-    h_win = [data_np[0:len(data_np)//2], data_np[len(data_np)//2:]]
-    labels.extend(['h_mean_change', 'h_max_change', 'h_min_change'])
-    stats.extend([h_win[1].mean() - h_win[0].mean(), h_win[1].max() - h_win[0].max(), h_win[1].min() - h_win[0].min()])
-    
-    # calculating quarter window statistics
-    if include_quarter_diff:
+
+    if not simple_stats:
+        # calculating half window statistics
+        h_win = [data_np[0:len(data_np)//2], data_np[len(data_np)//2:]]
+        labels.extend(['h_mean_change', 'h_max_change', 'h_min_change'])
+        stats.extend([h_win[1].mean() - h_win[0].mean(), h_win[1].max() - h_win[0].max(), h_win[1].min() - h_win[0].min()])
+        
+        # calculating quarter window statistics
         q_win = []
         for i in range(0, len(data_np), len(data_np)//4):
             win = data_np[i:i+len(data_np)//4]
@@ -282,7 +314,7 @@ def extract_stats_from_window(data: pd.Series, include_quarter_diff = False):
         stats.extend(q_mins)
 
     # calculate difference in quarter statistics
-    if include_quarter_diff:
+    if not simple_stats and include_quarter_diff:
         for i in range(len(q_means)):
             for j in range(i+1, len(q_means)):
                 labels.append(f'q{i}_minus_q{j}_mean')
@@ -292,20 +324,20 @@ def extract_stats_from_window(data: pd.Series, include_quarter_diff = False):
     features = pd.Series(stats, index = labels)
     return features
 
-def create_feature_dataframe(data: pd.DataFrame, include_quarter_diff = False):
-    extracted_stats = data.apply(extract_stats_from_window, axis=1, args=(include_quarter_diff,)).reset_index(drop=True)
+def create_feature_dataframe(data: pd.DataFrame, include_quarter_diff = False, simple_stats = False):
+    extracted_stats = data.apply(extract_stats_from_window, axis=1, args=(include_quarter_diff, simple_stats)).reset_index(drop=True)
     extracted_stats.index = data.index
     return extracted_stats
 
-def create_long_feature_dataframe(data: pd.DataFrame, window_size = 30, include_quarter_diff = False):
+def create_long_feature_dataframe(data: pd.DataFrame, window_size = 30, include_quarter_diff = False, simple_stats=False):
     def extract_long_feature_series(x: pd.Series):
-        return extract_feature_series(x, window_size, include_quarter_diff).stack()
+        return extract_feature_series(x, window_size, include_quarter_diff, simple_stats).stack()
     extracted_stats_long = data.apply(extract_long_feature_series, axis=1)
     extracted_stats_long.columns = ['_'.join(str(val) for val in col).strip() for col in extracted_stats_long.columns.values]
     print(extracted_stats_long)
     return extracted_stats_long
 
-def extract_feature_series(data: pd.Series, window_size = 30, include_quarter_diff = False):
+def extract_feature_series(data: pd.Series, window_size = 30, include_quarter_diff = False, simple_stats = False):
     '''
     Transforms a series of raw actigraphy data into a dataframe
     containing feature data across 24 hours using a sliding window
@@ -314,7 +346,7 @@ def extract_feature_series(data: pd.Series, window_size = 30, include_quarter_di
     features_by_window = []
     for i in range(0, len(data), window_size):
         window = data[i:i+window_size]
-        features_by_window.append(extract_stats_from_window(window, include_quarter_diff))
+        features_by_window.append(extract_stats_from_window(window, include_quarter_diff, simple_stats))
     return pd.concat(features_by_window, axis=1).transpose()
 
 def empty_dataframe_directory(dir_name: str):

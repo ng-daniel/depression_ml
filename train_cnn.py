@@ -14,7 +14,7 @@ import numpy as np
 
 from data import apply_smote, preprocess_train_test_dataframes, create_dataloaders, create_feature_dataframe, create_long_feature_dataframe
 from training_loops import run_cnn
-from eval import create_metrics_table
+from eval import create_metrics_table, combine_several_weighted_averages
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -40,13 +40,14 @@ preprocessing_settings = {
     'use_standard' : False,
     'use_gaussian' : 30,
     'subtract_mean' : True,
+    'adjust_seasonality' : True,
     'batch_size' : 32,
     'window_size' : 15
 }
 hyperparameter_settings = {
     'learning_rate' : 0.000005,
     'weight_decay' : 1e-4,
-    'epochs' : 10,
+    'epochs' : 15,
     'in_shape' : 1,
     'out_shape' : 1,
     'hidden_shape' : 32,
@@ -84,11 +85,7 @@ for i in tqdm(range(NUM_FOLDS),ncols=50):
     (X_train, X_test) = preprocess_train_test_dataframes(
                             X_train=X_train,
                             X_test=X_test,
-                            log_base=preprocessing_settings['log_base'],
-                            scale_range=preprocessing_settings['scale_range'],
-                            use_standard=preprocessing_settings['use_standard'],
-                            use_gaussian=preprocessing_settings['use_gaussian'],
-                            subtract_mean=preprocessing_settings['subtract_mean']
+                            settings=preprocessing_settings
                         )
     # # extract features
     # if LONG_FEATURE:
@@ -118,28 +115,10 @@ class_weights_dict = {
 }
 criterion = nn.BCEWithLogitsLoss(pos_weight=class_weights).to(device)
 
-# if GRID_SEARCH:
-    
-#     print("Performing gridsearch...")
-#     # select a random training dataframe to optimize
-#     index = random.randint(0, len(dataframes) - 1)
-#     (X_train, _, y_train, _) = dataframes[index]
-#     # gridsearch for optimal hyperparameters
-#     gridsearch = RandomizedSearchCV(estimator=XGBClassifier(),
-#                               param_distributions=hyperparameter_grid,
-#                               n_iter=135,
-#                               cv=2,
-#                               verbose=True)
-#     gridsearch.fit(X_train, y_train)
-#     print(f"absolute cinema of params: {gridsearch.best_params_}")
-#     # set settings to the optimal parameters
-#     for param in gridsearch.best_params_:
-#         hyperparameter_settings[param] = gridsearch.best_params_[param]
-
 print("Evaluating model...")
 
 cnn_results_list = []
-for i in tqdm(range(20), ncols=50):
+for i in tqdm(range(30), ncols=50):
     cnn_results = run_cnn(
         data=dataloaders,
         criterion=criterion,
@@ -155,12 +134,8 @@ for i in tqdm(range(20), ncols=50):
 # print(cnn_results)
 # print(hyperparameter_settings)
 # cnn_results.to_csv(os.path.join(RESULTS_DIR, "cnn.csv"))
-metrics = create_metrics_table(cnn_results_list)
-metrics.to_csv(os.path.join(RESULTS_DIR, "cnn_20_runs_metrics.csv"))
+metrics = combine_several_weighted_averages(cnn_results_list)
+metrics.to_csv(os.path.join(RESULTS_DIR, "cnn_30_metrics.csv"))
 print(metrics)
-print(metrics['acc'].mean())
-print(metrics['acc'].std())
-print(metrics['f1sc'].mean())
-print(metrics['f1sc'].std())
 
 print("Done.")

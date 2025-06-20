@@ -37,11 +37,13 @@ preprocessing_grid = {
 }
 
 preprocessing_settings = {
-    'resample' : True,
-    'log_base' : 10,
-    'scale_range' : (0,1),
-    'use_standard' : False,
-    'use_gaussian' : None
+    'resample' : False,
+    'log_base' : None,
+    'scale_range' : None,
+    'use_standard' : True,
+    'use_gaussian' : None,
+    'subtract_mean' : False,
+    'adjust_seasonality' : True
 }
 
 print("Loading data...")
@@ -74,19 +76,16 @@ for i in tqdm(range(NUM_FOLDS),ncols=50):
     (X_train, X_test) = preprocess_train_test_dataframes(
                             X_train=X_train,
                             X_test=X_test,
-                            log_base=preprocessing_settings['log_base'],
-                            scale_range=preprocessing_settings['scale_range'],
-                            use_standard=preprocessing_settings['use_standard'],
-                            use_gaussian=preprocessing_settings['use_gaussian']
+                            settings=preprocessing_settings
                         )
     # extract features
     if LONG_FEATURE:
-        X_train = create_long_feature_dataframe(X_train, window_size=60, include_quarter_diff=False)
-        X_test = create_long_feature_dataframe(X_test, window_size=60, include_quarter_diff=False)
+        X_train = create_long_feature_dataframe(X_train, window_size=60, include_quarter_diff=False, simple_stats=True)
+        X_test = create_long_feature_dataframe(X_test, window_size=60, include_quarter_diff=False, simple_stats=True)
         print(X_train)
     else:
-        X_train = create_feature_dataframe(X_train, True)
-        X_test = create_feature_dataframe(X_test, True)
+        X_train = create_feature_dataframe(X_train, True, simple_stats=True)
+        X_test = create_feature_dataframe(X_test, True, simple_stats=True)
     dataframes.append((X_train, X_test, y_train, y_test))
 
 # setup output directory, class weights, and loss function, 
