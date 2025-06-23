@@ -14,9 +14,9 @@ import numpy as np
 
 from sklearn.model_selection import RandomizedSearchCV
 from xgboost import XGBClassifier
-from data import apply_smote, preprocess_train_test_dataframes, create_feature_dataframe, create_long_feature_dataframe
-from training_loops import run_XGBoost
-from eval import create_metrics_table
+from core.data import process_data_folds
+from core.training_loops import run_XGBoost
+from core.eval import create_metrics_table
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -28,13 +28,7 @@ KFOLD_SMOTE_DIR = DATA_DIR + "/kfolds_smote"
 NUM_FOLDS = len(os.listdir(KFOLD_DIR))//2
 RESULTS_DIR = "results"
 GRID_SEARCH = False
-LONG_FEATURE = True
 
-preprocessing_grid = {
-    'resample' : [False, True],
-    'log_base' : [None, 10, 2],
-    'scale_range' : [None, (0,1), (-1,1)]
-}
 hyperparameter_grid = {
     'min_child_weight' : [1, 5, 10],
     'subsample' : [0.6, 0.8, 1],
@@ -47,6 +41,12 @@ preprocessing_settings = {
     'scale_range' : (-1,1),
     'use_standard' : False,
     'use_gaussian' : 100
+}
+feature_settings = {
+    'long_feature' : True,
+    'window_size' : 30,
+    'quarter_diff' : False,
+    'simple' : True
 }
 hyperparameter_settings = {
     'max_depth' : 6,
@@ -62,9 +62,8 @@ print("Loading data...")
 data_directory = RAW_PTH
 kfolds_directory = KFOLD_DIR
 data = pd.read_csv(data_directory, index_col=0)
-dataframes = []
-for i in tqdm(range(NUM_FOLDS),ncols=50):
-    # extract train/test index names
+kfolds = []
+for i in range(NUM_FOLDS):
     train_index = []
     test_index = []
     with open(kfolds_directory + f"/fold{i}t.txt", "r") as tfile:
@@ -73,32 +72,8 @@ for i in tqdm(range(NUM_FOLDS),ncols=50):
     with open(kfolds_directory + f"/fold{i}e.txt", "r") as efile:
         for sample_name in efile:
             test_index.append(sample_name.strip())
-    # split data based on the extracted train/test split
-    X = data.copy()
-    X_train = X.drop(labels=test_index, axis=0)
-    X_test = X.drop(labels=train_index, axis=0)
-    y_train = list(X_train.pop('label'))
-    y_test = list(X_test.pop('label'))
-    if preprocessing_settings['resample']:
-        # apply smote to training set
-        X_train, y_train = apply_smote(X_train, y_train, 0.1)
-    # preprocess data accordingly for the model
-    (X_train, X_test) = preprocess_train_test_dataframes(
-                            X_train=X_train,
-                            X_test=X_test,
-                            log_base=preprocessing_settings['log_base'],
-                            scale_range=preprocessing_settings['scale_range'],
-                            use_standard=preprocessing_settings['use_standard'],
-                            use_gaussian=preprocessing_settings['use_gaussian']
-                        )
-    # extract features
-    if LONG_FEATURE:
-        X_train = create_long_feature_dataframe(X_train, window_size=30, include_quarter_diff=False)
-        X_test = create_long_feature_dataframe(X_test, window_size=30, include_quarter_diff=False)
-    else:
-        X_train = create_feature_dataframe(X_train, True)
-        X_test = create_feature_dataframe(X_test, True)
-    dataframes.append((X_train, X_test, y_train, y_test))
+    kfolds.append((train_index, test_index))
+dataframes = process_data_folds(data, kfolds, preprocessing_settings, feature_settings)
 
 # setup output directory, class weights, and loss function, 
 # aka criterion, for model training and evaluation

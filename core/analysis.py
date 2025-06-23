@@ -1,8 +1,8 @@
 import pandas as pd
 import random
 import matplotlib.pyplot as plt
-from data import preprocess_train_test_dataframes
-from util import data_mean_med_std, get_time_index
+from core.data import preprocess_train_test_dataframes
+from core.util import data_mean_med_std, get_time_index
 
 data = pd.read_csv("data/processed_dataframes/data_raw.csv", index_col=0)
 data_control = data[data['label'] == 0].copy()

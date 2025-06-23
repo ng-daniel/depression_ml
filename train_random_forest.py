@@ -13,9 +13,9 @@ import torch.nn as nn
 
 from sklearn.model_selection import GridSearchCV, RandomizedSearchCV
 from sklearn.ensemble import RandomForestClassifier
-from data import apply_smote, preprocess_train_test_dataframes, create_feature_dataframe, create_long_feature_dataframe
-from training_loops import run_random_forest
-from eval import create_metrics_table
+from core.data import create_dataloaders, process_data_folds
+from core.training_loops import run_random_forest
+from core.eval import create_metrics_table
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -28,16 +28,6 @@ NUM_FOLDS = len(os.listdir(KFOLD_DIR))//2
 RESULTS_DIR = "results"
 LONG_FEATURE = True
 
-GRID_SEARCH = False
-USE_FEATURE_SERIES = True
-
-preprocessing_grid = {
-    'resample' : [False, True],
-    'log_base' : [None, 10, 2],
-    'scale_range' : [None, (0,1), (-1,1)]
-}
-
-# CHANGE TO RANDOM SEARCH CV
 hyperparameter_grid = {
     'n_estimators': [100, 200],
     'max_depth': [None, 10, 20],
@@ -45,6 +35,7 @@ hyperparameter_grid = {
     'min_samples_leaf': [1, 2],
     'bootstrap': [True, False]
 }
+use_grid_search = True
 
 preprocessing_settings = {
     'resample' : False,
@@ -55,6 +46,12 @@ preprocessing_settings = {
     'subtract_mean' : False,
     'adjust_seasonality' : False,
     'window_size' : 30
+}
+feature_settings = {
+    'long_feature' : True,
+    'window_size' : 30,
+    'quarter_diff' : False,
+    'simple' : True
 }
 hyperparameter_settings = {
     'n_estimators': 100,
@@ -71,13 +68,8 @@ print("Loading data...")
 data_directory = RAW_PTH
 kfolds_directory = KFOLD_DIR
 data = pd.read_csv(data_directory, index_col=0)
-
-# create feature series dataframe
-# X_feature_series_df = create_long_feature_dataframe(data.copy().drop('label'))
-# y_feature_series_df = list(data['label'])
-dataframes = []
-for i in tqdm(range(NUM_FOLDS), ncols=50):
-    # extract train/test index names
+kfolds = []
+for i in range(NUM_FOLDS):
     train_index = []
     test_index = []
     with open(kfolds_directory + f"/fold{i}t.txt", "r") as tfile:
@@ -86,36 +78,8 @@ for i in tqdm(range(NUM_FOLDS), ncols=50):
     with open(kfolds_directory + f"/fold{i}e.txt", "r") as efile:
         for sample_name in efile:
             test_index.append(sample_name.strip())
-    # split data based on the extracted train/test split
-    X = data.copy()
-    X_train = X.drop(labels=test_index, axis=0)
-    X_test = X.drop(labels=train_index, axis=0)
-    y_train = list(X_train.pop('label'))
-    y_test = list(X_test.pop('label'))
-    if preprocessing_settings['resample']:
-        # apply smote to training set
-        X_train, y_train = apply_smote(X_train, y_train, 0.1)
-
-    # preprocess data accordingly for the model
-    (X_train, X_test) = preprocess_train_test_dataframes(
-                            X_train=X_train,
-                            X_test=X_test,
-                            settings=preprocessing_settings
-                        )
-    # extract features
-    if LONG_FEATURE:
-        X_train = create_long_feature_dataframe(X_train, 
-                                                window_size=preprocessing_settings['window_size'],
-                                                include_quarter_diff=False,
-                                                simple_stats=True)
-        X_test = create_long_feature_dataframe(X_test, 
-                                               window_size=preprocessing_settings['window_size'],
-                                               include_quarter_diff=False,
-                                               simple_stats=True)
-    else:
-        X_train = create_feature_dataframe(X_train, include_quarter_diff=False, simple_stats=True)
-        X_test = create_feature_dataframe(X_test, include_quarter_diff=False, simple_stats=True)
-    dataframes.append((X_train, X_test, y_train, y_test))
+    kfolds.append((train_index, test_index))
+dataframes = process_data_folds(data, kfolds, preprocessing_settings, feature_settings)
 
 # setup output directory, class weights, and loss function, 
 # aka criterion, for model training and evaluation
@@ -126,7 +90,7 @@ class_weights_dict = {
 }
 criterion = nn.BCEWithLogitsLoss(pos_weight=class_weights).to(device)
 
-if GRID_SEARCH:
+if use_grid_search:
     # CHANGE TO RANDOM SEARCH CV
     print("Performing gridsearch...")
     

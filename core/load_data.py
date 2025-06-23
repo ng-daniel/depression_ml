@@ -5,8 +5,7 @@ print("PROCESS: DATA LOADING")
 
 import os
 import pandas as pd
-import random
-from data import (load_dataframe_labels, export_kfolds_split_indices)
+from core.data import (load_dataframe_labels, export_kfolds_split_indices)
 
 EXPORT_DIR = "data/processed_dataframes"
 DIR_NAMES = ["data/control", "data/condition"]

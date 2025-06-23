@@ -12,9 +12,9 @@ import torch
 import torch.nn as nn
 import numpy as np
 
-from data import apply_smote, preprocess_train_test_dataframes, create_dataloaders
-from training_loops import run_zeroR_baseline
-from eval import create_metrics_table
+from core.data import create_dataloaders, process_data_folds
+from core.training_loops import run_zeroR_baseline
+from core.eval import create_metrics_table
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -27,12 +27,6 @@ NUM_FOLDS = len(os.listdir(KFOLD_DIR))//2
 RESULTS_DIR = "results"
 LONG_FEATURE = True
 
-preprocessing_grid = {
-    'resample' : [False, True],
-    'log_base' : [None, 10, 2],
-    'scale_range' : [None, (0,1), (-1,1)]
-}
-
 preprocessing_settings = {
     'resample' : True,
     'log_base' : None,
@@ -40,6 +34,12 @@ preprocessing_settings = {
     'use_standard' : False,
     'use_gaussian' : 30,
     'batch_size' : 32
+}
+feature_settings = {
+    'long_feature' : True,
+    'window_size' : 30,
+    'quarter_diff' : False,
+    'simple' : True
 }
 hyperparameter_settings = {
     'learning_rate' : 0.000005,
@@ -57,9 +57,8 @@ print("Loading data...")
 data_directory = RAW_PTH
 kfolds_directory = KFOLD_DIR
 data = pd.read_csv(data_directory, index_col=0)
-dataframes = []
-for i in tqdm(range(NUM_FOLDS),ncols=50):
-    # extract train/test index names
+kfolds = []
+for i in range(NUM_FOLDS):
     train_index = []
     test_index = []
     with open(kfolds_directory + f"/fold{i}t.txt", "r") as tfile:
@@ -68,26 +67,8 @@ for i in tqdm(range(NUM_FOLDS),ncols=50):
     with open(kfolds_directory + f"/fold{i}e.txt", "r") as efile:
         for sample_name in efile:
             test_index.append(sample_name.strip())
-    # split data based on the extracted train/test split
-    X = data.copy()
-    X_train = X.drop(labels=test_index, axis=0)
-    X_test = X.drop(labels=train_index, axis=0)
-    y_train = list(X_train.pop('label'))
-    y_test = list(X_test.pop('label'))
-    
-    if preprocessing_settings['resample']:
-        # apply smote to training set
-        X_train, y_train = apply_smote(X_train, y_train, 0.1)
-    # preprocess data accordingly for the model
-    (X_train, X_test) = preprocess_train_test_dataframes(
-                            X_train=X_train,
-                            X_test=X_test,
-                            log_base=preprocessing_settings['log_base'],
-                            scale_range=preprocessing_settings['scale_range'],
-                            use_standard=preprocessing_settings['use_standard'],
-                            use_gaussian=preprocessing_settings['use_gaussian']
-                        )
-    dataframes.append((X_train, X_test, y_train, y_test))
+    kfolds.append((train_index, test_index))
+dataframes = process_data_folds(data, kfolds, preprocessing_settings, feature_settings)
 
 # augment data for cnn and wrap into dataloaders
 dataloaders = []

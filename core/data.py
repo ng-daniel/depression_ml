@@ -1,8 +1,7 @@
 import os
-import shutil
 import random
 
-import matplotlib.pyplot as plt
+from tqdm import tqdm
 import numpy as np
 import pandas as pd
 from imblearn.over_sampling import SMOTE
@@ -14,7 +13,7 @@ from sklearn.model_selection import StratifiedKFold
 import torch
 from torch.utils.data import Dataset, DataLoader
 
-from util import log_skip_zeroes, data_mean_med_std, subtract_corresponding_minute
+from core.util import log_skip_zeroes, data_mean_med_std, subtract_corresponding_minute
 
 CONDITION_SIZE = 23
 CONTROL_SIZE = 32
@@ -349,31 +348,6 @@ def extract_feature_series(data: pd.Series, window_size = 30, include_quarter_di
         features_by_window.append(extract_stats_from_window(window, include_quarter_diff, simple_stats))
     return pd.concat(features_by_window, axis=1).transpose()
 
-def empty_dataframe_directory(dir_name: str):
-    '''
-    Clears a data directory, treating "processed_dataframes" as the root path.
-    '''
-    assert(len(dir_name) > 0)
-
-    # remove entire directory and replace it with an empty one of the same name
-    
-    directory = os.path.join("data/processed_dataframes", dir_name)
-    shutil.rmtree(directory)
-    os.mkdir(directory)
-
-def reset_feature_series(num_folds: int):
-    '''
-    Clears and resets the feature series data folder
-    with the appropriate number of folds.
-    '''
-    empty_dataframe_directory("feature_series")
-    directory = "data/processed_dataframes/feature_series"
-    for i in range(num_folds):
-        fold_dir = os.path.join(directory, str(i))
-        os.mkdir(fold_dir)
-        os.mkdir(os.path.join(fold_dir, "train"))
-        os.mkdir(os.path.join(fold_dir, "test"))
-
 def export_kfolds_split_indices(data: pd.DataFrame, labels: list, export_dir: str, n_splits: int, shuffle: bool, random_state: int = None):
     '''
     Splits data into N folds, writing each fold to a directory as a text file.
@@ -418,6 +392,55 @@ def export_kfolds_split_indices(data: pd.DataFrame, labels: list, export_dir: st
             for name in test_names:
                 file.write(name + "\n")
 
-def load_kf_actigraphy_dfs():
-    pass
+def process_data_folds(data, kfolds, preprocessing_settings, feature_settings=None):
+    
+    # data = pd.read_csv(data_directory, index_col=0)
+    # kfolds = []
+    # for i in range(NUM_FOLDS):
+    #     train_index = []
+    #     test_index = []
+    #     with open(kfolds_directory + f"/fold{i}t.txt", "r") as tfile:
+    #         for sample_name in tfile:
+    #             train_index.append(sample_name.strip())
+    #     with open(kfolds_directory + f"/fold{i}e.txt", "r") as efile:
+    #         for sample_name in efile:
+    #             test_index.append(sample_name.strip())
+    #     kfolds.append((train_index, test_index))
+    
+    dataframes = []
+    for i in tqdm(range(len(kfolds)),ncols=50):
+        # extract train/test index names
+        (train_index, test_index) = kfolds[i]
+        
+        # split data based on the extracted train/test split
+        X = data.copy()
+        X_train = X.drop(labels=test_index, axis=0)
+        X_test = X.drop(labels=train_index, axis=0)
+        y_train = list(X_train.pop('label'))
+        y_test = list(X_test.pop('label'))
+        
+        if preprocessing_settings['resample']:
+            # apply smote to training set
+            X_train, y_train = apply_smote(X_train, y_train, 0.1)
+        
+        # preprocess data accordingly for the model
+        (X_train, X_test) = preprocess_train_test_dataframes(
+                                X_train=X_train,
+                                X_test=X_test,
+                                settings=preprocessing_settings
+                            )
+       
+        # extract features
+        if feature_settings['use_feature'] and feature_settings['long_feature']:
+            X_train = create_long_feature_dataframe(X_train, window_size=feature_settings['window_size'], 
+                                                    include_quarter_diff=feature_settings['quarter_diff'],
+                                                    simple_stats=feature_settings['simple'])
+            X_test = create_long_feature_dataframe(X_test, window_size=feature_settings['window_size'], 
+                                                   include_quarter_diff=feature_settings['quarter_diff'],
+                                                   simple_stats=feature_settings['simple'])
+        elif feature_settings['use_feature']:
+            X_train = create_feature_dataframe(X_train, feature_settings['quarter_diff'], simple_stats=feature_settings['simple'])
+            X_test = create_feature_dataframe(X_test, feature_settings['quarter_diff'], simple_stats=feature_settings['simple'])
+        dataframes.append((X_train, X_test, y_train, y_test))
 
+    return dataframes

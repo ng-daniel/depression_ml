@@ -14,9 +14,9 @@ import numpy as np
 
 from sklearn.model_selection import RandomizedSearchCV
 from xgboost import XGBClassifier
-from data import apply_smote, preprocess_train_test_dataframes, create_feature_dataframe, create_long_feature_dataframe
-from training_loops import run_linear_svc
-from eval import create_metrics_table
+from core.data import process_data_folds
+from core.training_loops import run_linear_svc
+from core.eval import create_metrics_table
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -27,15 +27,12 @@ KFOLD_DIR = DATA_DIR + "/kfolds"
 KFOLD_SMOTE_DIR = DATA_DIR + "/kfolds_smote"
 NUM_FOLDS = len(os.listdir(KFOLD_DIR))//2
 RESULTS_DIR = "results"
-GRID_SEARCH = True
-LONG_FEATURE = False
 
 preprocessing_grid = {
     'resample' : [False, True],
     'log_base' : [None, 10, 2],
     'scale_range' : [None, (0,1), (-1,1)]
 }
-
 preprocessing_settings = {
     'resample' : False,
     'log_base' : None,
@@ -45,6 +42,12 @@ preprocessing_settings = {
     'subtract_mean' : False,
     'adjust_seasonality' : True
 }
+feature_settings = {
+    'long_feature' : True,
+    'window_size' : 30,
+    'quarter_diff' : False,
+    'simple' : True
+}
 
 print("Loading data...")
 
@@ -52,9 +55,8 @@ print("Loading data...")
 data_directory = RAW_PTH
 kfolds_directory = KFOLD_DIR
 data = pd.read_csv(data_directory, index_col=0)
-dataframes = []
-for i in tqdm(range(NUM_FOLDS),ncols=50):
-    # extract train/test index names
+kfolds = []
+for i in range(NUM_FOLDS):
     train_index = []
     test_index = []
     with open(kfolds_directory + f"/fold{i}t.txt", "r") as tfile:
@@ -63,30 +65,8 @@ for i in tqdm(range(NUM_FOLDS),ncols=50):
     with open(kfolds_directory + f"/fold{i}e.txt", "r") as efile:
         for sample_name in efile:
             test_index.append(sample_name.strip())
-    # split data based on the extracted train/test split
-    X = data.copy()
-    X_train = X.drop(labels=test_index, axis=0)
-    X_test = X.drop(labels=train_index, axis=0)
-    y_train = list(X_train.pop('label'))
-    y_test = list(X_test.pop('label'))
-    if preprocessing_settings['resample']:
-        # apply smote to training set
-        X_train, y_train = apply_smote(X_train, y_train, 0.1)
-    # preprocess data accordingly for the model
-    (X_train, X_test) = preprocess_train_test_dataframes(
-                            X_train=X_train,
-                            X_test=X_test,
-                            settings=preprocessing_settings
-                        )
-    # extract features
-    if LONG_FEATURE:
-        X_train = create_long_feature_dataframe(X_train, window_size=60, include_quarter_diff=False, simple_stats=True)
-        X_test = create_long_feature_dataframe(X_test, window_size=60, include_quarter_diff=False, simple_stats=True)
-        print(X_train)
-    else:
-        X_train = create_feature_dataframe(X_train, True, simple_stats=True)
-        X_test = create_feature_dataframe(X_test, True, simple_stats=True)
-    dataframes.append((X_train, X_test, y_train, y_test))
+    kfolds.append((train_index, test_index))
+dataframes = process_data_folds(data, kfolds, preprocessing_settings, feature_settings)
 
 # setup output directory, class weights, and loss function, 
 # aka criterion, for model training and evaluation
@@ -96,24 +76,6 @@ class_weights_dict = {
       1 : class_weights.item()
 }
 criterion = nn.BCEWithLogitsLoss(pos_weight=class_weights).to(device)
-
-# if GRID_SEARCH:
-    
-#     print("Performing gridsearch...")
-#     # select a random training dataframe to optimize
-#     index = random.randint(0, len(dataframes) - 1)
-#     (X_train, _, y_train, _) = dataframes[index]
-#     # gridsearch for optimal hyperparameters
-#     gridsearch = RandomizedSearchCV(estimator=XGBClassifier(),
-#                               param_distributions=hyperparameter_grid,
-#                               n_iter=135,
-#                               cv=2,
-#                               verbose=True)
-#     gridsearch.fit(X_train, y_train)
-#     print(f"absolute cinema of params: {gridsearch.best_params_}")
-#     # set settings to the optimal parameters
-#     for param in gridsearch.best_params_:
-#         hyperparameter_settings[param] = gridsearch.best_params_[param]
 
 print("Evaluating model...")
 

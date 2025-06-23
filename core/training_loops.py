@@ -8,9 +8,9 @@ from sklearn.svm import SVC
 from sklearn.tree import DecisionTreeClassifier
 from xgboost import XGBClassifier
 
-from engine import train_test
-from eval import eval_model, eval_sklearn_model, append_weighted_average
-from model import ZeroR, ConvNN, LSTM, FeatureMLP, LSTM_Feature, ConvLSTM
+from core.engine import train_test
+from core.eval import eval_model, eval_sklearn_model, append_weighted_average
+from core.model import ZeroR, ConvNN, LSTM, FeatureMLP, LSTM_Feature, ConvLSTM
 
 def run_linear_svc(data: list, criterion, device, weights = None):
     print("Linear SVM Classifier:")

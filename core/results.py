@@ -3,7 +3,7 @@ import pandas as pd
 import random
 import matplotlib.pyplot as plt
 
-from eval import create_metrics_table
+from core.eval import create_metrics_table
 
 RESULTS_DIR = 'results'
 
