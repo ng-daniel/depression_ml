@@ -27,13 +27,13 @@ KFOLD_DIR = DATA_DIR + "/kfolds"
 KFOLD_SMOTE_DIR = DATA_DIR + "/kfolds_smote"
 NUM_FOLDS = len(os.listdir(KFOLD_DIR))//2
 RESULTS_DIR = "results"
-GRID_SEARCH = False
 
 hyperparameter_grid = {
     'min_child_weight' : [1, 5, 10],
     'subsample' : [0.6, 0.8, 1],
     'colsample_bytree' : [0.6, 0.8, 1],
 }
+use_grid_search = True
 
 preprocessing_settings = {
     'resample' : True,
@@ -84,7 +84,7 @@ class_weights_dict = {
 }
 criterion = nn.BCEWithLogitsLoss(pos_weight=class_weights).to(device)
 
-if GRID_SEARCH:
+if use_grid_search:
     
     print("Performing gridsearch...")
     # select a random training dataframe to optimize

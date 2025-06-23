@@ -109,6 +109,5 @@ for i in tqdm(range(30), ncols=50):
 metrics = combine_several_weighted_averages(mlp_results_list)
 metrics.to_csv(os.path.join(RESULTS_DIR, "mlp_30_metrics.csv"))
 print(metrics)
-print(metrics['f1sc'].std())
 
 print("Done.")
