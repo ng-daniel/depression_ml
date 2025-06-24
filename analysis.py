@@ -8,6 +8,16 @@ data = pd.read_csv("data/processed_dataframes/data_raw.csv", index_col=0)
 data_control = data[data['label'] == 0].copy()
 data_condition = data[data['label'] == 1].copy()
 
+def get_time_index():
+    '''
+    Creates an index of times for every minute starting from 12:00 PM to 11:59 AM, then 12:00 PM again.
+    Used as an X axis for graphs. 
+    '''
+    time_index = [f'{12 + i//60:02d}' for i in range(0,720,120)]
+    time_index += [f'{i//60:02d}' for i in range(0,720,120)]
+    time_index += ['12']
+    return time_index
+
 def data_mean_trend_plot(data_control:pd.DataFrame = None, data_condition:pd.DataFrame = None, stat:str = None, title=None):
     fig, ax = plt.subplots()
     time_index = get_time_index()    

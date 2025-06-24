@@ -28,11 +28,6 @@ KFOLD_SMOTE_DIR = DATA_DIR + "/kfolds_smote"
 NUM_FOLDS = len(os.listdir(KFOLD_DIR))//2
 RESULTS_DIR = "results"
 
-preprocessing_grid = {
-    'resample' : [False, True],
-    'log_base' : [None, 10, 2],
-    'scale_range' : [None, (0,1), (-1,1)]
-}
 preprocessing_settings = {
     'resample' : False,
     'log_base' : None,
@@ -43,6 +38,7 @@ preprocessing_settings = {
     'adjust_seasonality' : True
 }
 feature_settings = {
+    'use_feature' : True,
     'long_feature' : True,
     'window_size' : 30,
     'quarter_diff' : False,

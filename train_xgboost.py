@@ -43,6 +43,7 @@ preprocessing_settings = {
     'use_gaussian' : 100
 }
 feature_settings = {
+    'use_feature' : True,
     'long_feature' : True,
     'window_size' : 30,
     'quarter_diff' : False,

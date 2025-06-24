@@ -36,6 +36,7 @@ preprocessing_settings = {
     'batch_size' : 32
 }
 feature_settings = {
+    'use_feature' : False,
     'long_feature' : True,
     'window_size' : 30,
     'quarter_diff' : False,

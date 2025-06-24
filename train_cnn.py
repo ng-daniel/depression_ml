@@ -29,15 +29,14 @@ RESULTS_DIR = "results"
 preprocessing_settings = {
     'resample' : True,
     'log_base' : None,
-    'scale_range' : (0,1),
-    'use_standard' : False,
+    'scale_range' : None,
+    'use_standard' : True,
     'use_gaussian' : 30,
     'subtract_mean' : True,
     'adjust_seasonality' : True,
-    'batch_size' : 32,
-    'window_size' : 15
 }
 feature_settings = {
+    'use_feature' : False,
     'long_feature' : True,
     'window_size' : 30,
     'quarter_diff' : False,
@@ -46,7 +45,7 @@ feature_settings = {
 hyperparameter_settings = {
     'learning_rate' : 0.000005,
     'weight_decay' : 1e-4,
-    'epochs' : 15,
+    'epochs' : 20,
     'in_shape' : 1,
     'out_shape' : 1,
     'hidden_shape' : 32,
@@ -80,7 +79,7 @@ for (X_train, X_test, y_train, y_test) in dataframes:
 
 # setup output directory, class weights, and loss function, 
 # aka criterion, for model training and evaluation
-class_weights = torch.tensor([1]).to(device)
+class_weights = torch.tensor([1.1]).to(device)
 class_weights_dict = {
       0 : 1,
       1 : class_weights.item()
@@ -103,6 +102,7 @@ for i in tqdm(range(30), ncols=50):
         flatten_factor=hyperparameter_settings['flatten_factor']
     )
     cnn_results_list.append(cnn_results)
+    print(cnn_results)
 # print(cnn_results)
 # print(hyperparameter_settings)
 # cnn_results.to_csv(os.path.join(RESULTS_DIR, "cnn.csv"))

@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 
 from core.eval import create_metrics_table
 
-RESULTS_DIR = '../results'
+RESULTS_DIR = 'results'
 
 # aggregate all final results into a single dataframe
 results = []

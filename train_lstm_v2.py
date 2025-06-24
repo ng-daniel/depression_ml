@@ -39,15 +39,16 @@ preprocessing_settings = {
     'window_size' : 30
 }
 feature_settings = {
+    'use_feature' : True,
     'long_feature' : True,
     'window_size' : 30,
     'quarter_diff' : False,
     'simple' : True
 }
 hyperparameter_settings = {
-    'learning_rate' : 0.00005,
+    'learning_rate' : 0.0004,
     'weight_decay' : 1e-4,
-    'epochs' : 100,
+    'epochs' : 75,
     'out_shape' : 1,
     'hidden_shape' : 64,
     'lstm_layers' : 8
