@@ -2,6 +2,10 @@ import torch
 from torch import nn
 
 class LSTM(nn.Module):
+    '''
+    LSTM architecture
+    "Batches" actigraphy data points in groups of `in_shape`, aka number of features per row.
+    '''
     def __init__(self, in_shape, out_shape, hidden_shape, lstm_layers):
         super().__init__()
         self.in_shape = in_shape
@@ -20,42 +24,35 @@ class LSTM(nn.Module):
         )
     def forward(self, x):
         # number of LSTM layers * L * hidden shape
-        h0 = torch.zeros(self.lstm_layers, 
-                         x.size(0), 
-                         self.hidden_shape).to(x.device)
-        c0 = torch.zeros(self.lstm_layers, 
-                         x.size(0), 
-                         self.hidden_shape).to(x.device)
-        # print(x.shape)
         x = x.squeeze(dim=1).unsqueeze(dim=2)
         x = torch.reshape(x, (x.size(0), int(x.size(1) / self.in_shape), self.in_shape))
         # print(x.shape)
-        x, (hn, cn) = self.lstm(x, (h0, c0))
-        # print(f"{x.shape} | {hn.shape} | {cn.shape}")
+        x, _ = self.lstm(x)
         x = x[:, -1, :]
         x = self.fc()
-        # print(x.shape)
         return x
 
 class ZeroR(nn.Module):
+    '''
+    Zero Rule Baseline Class that only predicts the majority class (zero)
+    '''
     def __init__(self):
         super().__init__()
     def forward(self, x):
         return torch.zeros(len(x)).unsqueeze(1).to(x.device)
 
 class ConvNN(nn.Module):
+    '''
+    1D Convolutional Neural Net
+    2 Filters w. Batch Norm and ReLU Activation
+    1 Max Pool to reduce dimensions in half
+    Flatten + FC layer
+    '''
     def __init__(self, in_shape, output_dim, hidden_shape, flatten_factor):
         super().__init__()
-        self.conv_block_1 = nn.Sequential(
+        self.conv_block = nn.Sequential(
             nn.Conv1d(in_shape, hidden_shape, kernel_size=3, padding = 1),
             nn.BatchNorm1d(hidden_shape),
-            nn.ReLU(),
-            nn.Conv1d(hidden_shape, hidden_shape, kernel_size=3, padding = 1),
-            nn.ReLU(),
-            nn.MaxPool1d(2)
-        )
-        self.conv_block_2 = nn.Sequential(
-            nn.Conv1d(hidden_shape, hidden_shape, kernel_size=3, padding = 1),
             nn.ReLU(),
             nn.Conv1d(hidden_shape, hidden_shape, kernel_size=3, padding = 1),
             nn.ReLU(),
@@ -64,20 +61,21 @@ class ConvNN(nn.Module):
         self.linear = nn.Sequential(
             nn.Flatten(),
             nn.Linear(hidden_shape * flatten_factor, hidden_shape),
-            # nn.Dropout(p=0.5),
             nn.ReLU(),
             nn.Linear(hidden_shape, output_dim)
         )
     def forward(self, x):
         #print(x.shape)
-        x = self.conv_block_1(x)
+        x = self.conv_block(x)
         #print(x.shape)
-        #x = self.conv_block_2(x)
         x = self.linear(x)
         #print(x.shape)
         return x
 
 class FeatureMLP(nn.Module):
+    '''
+    Multi-layer Perceptron
+    '''
     def __init__(self, in_shape, out_shape, hidden_shape):
         super().__init__()
         self.linear = nn.Sequential(
@@ -94,6 +92,9 @@ class FeatureMLP(nn.Module):
         return x
 
 class LSTM_Feature(nn.Module):
+    '''
+    LSTM model on extracted feature data instead.
+    '''
     def __init__(self, in_shape, out_shape, hidden_shape, lstm_layers, window_size):
         super().__init__()
         self.in_shape = in_shape
@@ -120,6 +121,11 @@ class LSTM_Feature(nn.Module):
         return x
     
 class ConvLSTM(nn.Module):
+    '''
+    Hybrid model: ConvNN to extract features, LSTM to learn the sequence.
+    3 Filters with Batch Normalization, ReLU Activation, and Max Pooling
+    Lstm layers followed by a fully connected layer
+    '''
     def __init__(self, in_shape, out_shape, hidden_shape, lstm_layers):
         super().__init__()
         
@@ -158,6 +164,7 @@ class ConvLSTM(nn.Module):
         x = self.conv_block(x)
         x = x.permute((0,2,1))
         x, _ = self.lstm(x)
-        x = x[:,-1,:]
+        x = x.mean(dim=1)
+        # x = x[:,-1,:]
         x = self.fc(x)
         return x

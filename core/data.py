@@ -5,9 +5,7 @@ from tqdm import tqdm
 import numpy as np
 import pandas as pd
 from imblearn.over_sampling import SMOTE
-from scipy.fft import rfft
 from scipy.ndimage import gaussian_filter1d
-from scipy.stats import skew, kurtosis
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
 from sklearn.model_selection import StratifiedKFold
 import torch
@@ -21,6 +19,9 @@ DIR_PATH = "data/all"
 scores = pd.read_csv("data/scores.csv", index_col='number')
 
 class ActigraphDataset(Dataset):
+    '''
+    Pytorch dataset class to format data for batched dataloaders
+    '''
     def __init__(self, X, y):
         self.X = X
         self.y = y
@@ -31,7 +32,46 @@ class ActigraphDataset(Dataset):
         y = self.y[index]
         return X, y
 
-def _load_data_from_folder(dir_name: str, class_type: str, class_label: int, output_df: pd.DataFrame, scores_df: pd.DataFrame, start_time: str = None):
+def create_dataloaders(X_train: pd.DataFrame, X_test: pd.DataFrame, y_train: list, y_test: list,
+                         shuffle: bool, batch_size: int):
+    '''
+    Wraps train / test dataframes of any data format into a dataloader
+
+    Args
+    - X_train - train dataframe 
+    - X_test - test dataframe
+    - y_train - train labels
+    - y_test - test labels
+    - shuffle - shuffle dataset when creating dataloaders
+    - batch_size - batch size of dataloaders
+
+    Returns
+    - (DataLoader, DataLoader) tuple of train and test dataloaders
+    '''
+    # convert data to tensors
+    if (type(X_train) == pd.DataFrame):
+        X_train = torch.from_numpy(X_train.to_numpy()).float().unsqueeze(dim=1)
+        X_test = torch.from_numpy(X_test.to_numpy()).float().unsqueeze(dim=1)    
+        y_train = torch.tensor(y_train).float()
+        y_test = torch.tensor(y_test).float()
+
+    # wrap in pytorch dataloader
+    train_dataset = ActigraphDataset(X_train, y_train)
+    test_dataset = ActigraphDataset(X_test, y_test)
+    train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=shuffle)
+    test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=shuffle)
+
+    return (train_dataloader, test_dataloader)
+
+
+'''
+
+Data loading and exporting to and from directories.
+
+'''
+
+
+def _load_data_from_folder(dir_name: str, class_type: str, class_label: int, scores_df: pd.DataFrame, start_time: str = None):
     '''
     Processes and groups all individual data files into a single dataframe, and then concatenates them to an existing dataframe.
     
@@ -39,11 +79,12 @@ def _load_data_from_folder(dir_name: str, class_type: str, class_label: int, out
     - dir_name - the directory to process the dataframe from
     - class_type - the class name of data to load ('control', 'condition')
     - class_label - the class number of data to load (0 / 1)
-    - output_df - the dataframe to concatenate final compliation to
     - scores_df - dataframe containing the 'scores' which includes number of recorded days per subject
     - start_tile - arbitrary time selected to start counting data to ensure uniformity across subjects (ie. 12:00:00)
-    '''
 
+    Returns
+        dataframe containing all data with labels
+    '''
     data = pd.DataFrame()
     day_dfs = []
     
@@ -85,12 +126,13 @@ def load_dataframe_labels(dir_names: list, class_names: list, time: str = None):
     '''
     Aggregates all data into a single dataframe, starting from a uniform time value.
     
-    Args:
+    Args
     - dir_names - a list of the directories to search for data
     - class_names - a list of the relevant class name corresponding to each directory
     - time - arbitrary time selected to start counting data to ensure uniformity across subjects (ie. 12:00:00)
 
-    Returns a dataframe containing all the data
+    Returns 
+    - a dataframe containing all the data
     '''
     # load scores dataframe (information about each datafile)
     scores = pd.read_csv("data/scores.csv", index_col='number')
@@ -99,10 +141,11 @@ def load_dataframe_labels(dir_names: list, class_names: list, time: str = None):
     data = pd.DataFrame()
     dfs = []
     for CLASS in range(len(dir_names)):
-        dfs.append(
-            _load_data_from_folder(dir_names[CLASS], class_names[CLASS], 
-                                    CLASS, data, scores, time)
-        )
+        dfs.append(_load_data_from_folder(dir_name=dir_names[CLASS], 
+                                          class_type=class_names[CLASS], 
+                                          class_label=CLASS,
+                                          scores_df=scores, 
+                                          start_time=time))
     
     # combine control and condition dfs
     data = pd.concat(dfs, axis=1)
@@ -112,26 +155,84 @@ def load_dataframe_labels(dir_names: list, class_names: list, time: str = None):
     labels = data.index.map(lambda x: int(x[0]))
     return data, labels
 
-def kfolds_dataframes(data: pd.DataFrame, labels: list, numfolds: int, shuffle: bool, random_state: int = None):
-    if shuffle:
-        kf = StratifiedKFold(n_splits=numfolds, shuffle=shuffle, random_state=random_state)
-    else:
-        kf = StratifiedKFold(n_splits=numfolds, shuffle=shuffle)
-    kf.get_n_splits(data, labels)
-
-    folds = []
-    for i, (train_index, test_index) in enumerate(kf.split(data)):
-        
-        X_train = data.iloc[train_index]
-        X_test = data.iloc[test_index]
-        y_train = [labels[i] for i in train_index]
-        y_test = [labels[i] for i in test_index]
-
-        folds.append((X_train, X_test, y_train, y_test))
+def export_kfolds_split_indices(data: pd.DataFrame, labels: list, export_dir: str, n_splits: int, shuffle: bool, random_state: int = None):
+    '''
+    Splits the data by subject into k folds while preserving the relative proportions of each class.
     
-    return folds
+    Writes these splits to a specified directory to ensure different models are using the same split.
 
-def apply_smote(actigraph_data:pd.DataFrame, actigraph_labels:list, undersample_amount:float):
+    Args
+    - data - a dataframe of all the data from the dataset
+    - export_dir - the directory to export the folds to
+    - n_splits - number of splits to use
+    - shuffle - whether to randomize the splits
+    - random_state - random seed for the splits
+
+    Returns
+    - nothing
+    '''
+    # extracts all individual subject labels from data index
+    sample_names = list(data.index)
+    subject_names = list(dict.fromkeys(['_'.join(name.split(sep='_')[0:2]) for name in sample_names]))
+    subject_labels = [int(name[0]) for name in subject_names]
+
+    print(subject_names)
+    print(len(subject_names))
+    print(subject_labels)
+    print(len(subject_labels))
+
+    print(subject_names)
+
+    kf = StratifiedKFold(n_splits=n_splits, 
+               shuffle=shuffle, 
+               random_state=random_state)
+
+    for i, (train_index, test_index) in enumerate(kf.split(subject_names, subject_labels)):
+        
+        print(train_index)
+        print(test_index)
+
+        train_subjects = [name for i, name in enumerate(subject_names) if i in train_index]
+        train_names = []
+        for subject_name in train_subjects:
+            train_names += [name for name in sample_names if (subject_name + '_') in name]
+        
+        test_subjects = [name for i, name in enumerate(subject_names) if i in test_index]
+        test_names = []
+        for subject_name in test_subjects:
+            test_names += [name for name in sample_names if (subject_name + '_') in name]
+
+        train_filename = f"fold{i}t.txt"
+        test_filename = f"fold{i}e.txt"   
+
+        # write names to files in the kfolds folder
+        with open(os.path.join(export_dir, train_filename), "w") as file:
+            for name in train_names:
+                file.write(name + "\n")
+        with open(os.path.join(export_dir, test_filename), "w") as file:
+            for name in test_names:
+                file.write(name + "\n")
+
+
+'''
+
+Preprocessing functions.
+
+'''
+
+
+def _apply_smote(actigraph_data:pd.DataFrame, actigraph_labels:list, undersample_amount:float):
+    '''
+    Resamples the data using synthetic minority oversampling technique (smote)
+    
+    Args
+    - actigraph_data - input dataframe
+    - actigraph_labels - input labels
+    - undersample amount - proportion of majority class to remove before generating samples for the minority class
+
+    Returns
+    - a tuple (pd.Dataframe, list) containing the resampled data and the respective labels
+    '''
     # undersample control class by a set amount
     print(f"initial amount: {pd.Series(actigraph_labels).value_counts()}")
     resampled_data = actigraph_data.copy()
@@ -155,17 +256,32 @@ def apply_smote(actigraph_data:pd.DataFrame, actigraph_labels:list, undersample_
     return (resampled_data, list(resampled_labels))
 
 def preprocess_train_test_dataframes(
-        X_train: pd.DataFrame, X_test: pd.DataFrame = None, 
+        X_train: pd.DataFrame, X_test: pd.DataFrame = None,
+        settings : dict = None,
         log_base : int = None, 
         scale_range : tuple = None, 
         use_standard = False, 
         use_gaussian = None,
         subtract_mean = False,
         adjust_seasonality = False,
-        settings : dict = None
     ):
     '''
-    Preprocesses
+    Applies various preprocessing techniques to the data.
+
+    Args
+    - X_train - train split of input data
+    - X_test - test split of input data
+    - settings - dictionary of mixed values to determine which techniques are applied and how
+    
+    - log_base - int of log base to apply, None if no log transformation
+    - scale_range - (int, int) tuple of the minmax range, None for no minmax scaling
+    - use_standard - boolean for standard scaling(overriden by scale_range)
+    - use_gaussian - sigma value for gaussian denoising/smoothing, None for no smoothing
+    - subtract_mean - boolean for subtracting the mean of train-control group from all train and test samples
+    - adjust_seasonality - boolean for subtracting the best fit polynomial to reduce the effects of the circadian cycle
+
+    Returns
+    - (pd.Dataframe, pd.Dataframe) tuple of modified train and test data
     '''
     # use settings instead if available
     if settings is not None:
@@ -240,27 +356,15 @@ def preprocess_train_test_dataframes(
 
     return (X_train, X_test)
 
-def create_dataloaders(X_train: pd.DataFrame, X_test: pd.DataFrame, y_train: list, y_test: list,
-                         shuffle: bool, batch_size: int):
-    '''
-    Wraps train / test dataframes of any data format into a dataloader
-    '''
-    # convert data to tensors
-    if (type(X_train) == pd.DataFrame):
-        X_train = torch.from_numpy(X_train.to_numpy()).float().unsqueeze(dim=1)
-        X_test = torch.from_numpy(X_test.to_numpy()).float().unsqueeze(dim=1)    
-        y_train = torch.tensor(y_train).float()
-        y_test = torch.tensor(y_test).float()
 
-    # wrap in pytorch dataloader
-    train_dataset = ActigraphDataset(X_train, y_train)
-    test_dataset = ActigraphDataset(X_test, y_test)
-    train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=shuffle)
-    test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=shuffle)
+'''
 
-    return (train_dataloader, test_dataloader)
+Feature extraction functions.
 
-def extract_stats_from_window(data: pd.Series, include_quarter_diff = False, simple_stats = False):
+'''
+
+
+def _extract_stats_from_window(data: pd.Series, include_quarter_diff = False, simple_stats = False):
     '''
     Extracts stats from a window of actigraph data (total of ):
         - Sample Mean, Sample Std. Dev., Sample Skewness, Sample Kurtosis, Max, Min (6)
@@ -270,6 +374,8 @@ def extract_stats_from_window(data: pd.Series, include_quarter_diff = False, sim
 
     Args
         - data: the actigraphy data series window to extract features from
+        - include_quarter_diff - whether to include subtracted quarter differences as features
+        - simple_stats - whether to exclude half window and quarter window statistics
     
     Returns
         - a dataframe containing a single row, where the columns are the extracted features 
@@ -323,90 +429,68 @@ def extract_stats_from_window(data: pd.Series, include_quarter_diff = False, sim
     features = pd.Series(stats, index = labels)
     return features
 
-def create_feature_dataframe(data: pd.DataFrame, include_quarter_diff = False, simple_stats = False):
-    extracted_stats = data.apply(extract_stats_from_window, axis=1, args=(include_quarter_diff, simple_stats)).reset_index(drop=True)
+def _create_feature_dataframe(data: pd.DataFrame, include_quarter_diff = False, simple_stats = False):
+    '''
+    Transforms actigraphy data into extracted feature data for an entire dataframe
+
+    Args
+    - data - the dataframe to extract features from
+    - include_quarter_diff - whether to include subtracted quarter differences as features
+    - simple_stats - whether to exclude half window and quarter window statistics
+
+    Returns
+    - dataframe like the input data, except with extracted features instead of the raw time series
+    '''
+    extracted_stats = data.apply(_extract_stats_from_window, axis=1, args=(include_quarter_diff, simple_stats)).reset_index(drop=True)
     extracted_stats.index = data.index
+
     return extracted_stats
 
-def create_long_feature_dataframe(data: pd.DataFrame, window_size = 30, include_quarter_diff = False, simple_stats=False):
-    def extract_long_feature_series(x: pd.Series):
-        return extract_feature_series(x, window_size, include_quarter_diff, simple_stats).stack()
-    extracted_stats_long = data.apply(extract_long_feature_series, axis=1)
+def _create_long_feature_dataframe(data: pd.DataFrame, window_size = 30, include_quarter_diff = False, simple_stats=False):
+    '''
+    Transforms actigraphy data into extracted feature data for an entire dataframe with a sliding window approach.
+
+    Args
+    - data - the dataframe to extract features from
+    - window_size - number of datapoints per window
+    - include_quarter_diff - whether to include subtracted quarter differences as features
+    - simple_stats - whether to exclude half window and quarter window statistics
+
+    Returns
+    - dataframe like the input data, except with extracted features instead of the raw time series for all windows
+    '''
+    def _extract_long_feature_series(x: pd.Series):
+        '''
+        Extracts long feature series from data, stacking each window side by side to make a single row.
+        '''
+        features_by_window = []
+        for i in range(0, len(x), window_size):
+            window = x[i:i+window_size]
+            features_by_window.append(_extract_stats_from_window(window, include_quarter_diff, simple_stats))
+        return pd.concat(features_by_window, axis=1).transpose().stack()
+    
+    extracted_stats_long = data.apply(_extract_long_feature_series, axis=1)
     extracted_stats_long.columns = ['_'.join(str(val) for val in col).strip() for col in extracted_stats_long.columns.values]
-    print(extracted_stats_long)
     return extracted_stats_long
 
-def extract_feature_series(data: pd.Series, window_size = 30, include_quarter_diff = False, simple_stats = False):
-    '''
-    Transforms a series of raw actigraphy data into a dataframe
-    containing feature data across 24 hours using a sliding window
-    approach for increasing increments of 30 minutes.
-    '''
-    features_by_window = []
-    for i in range(0, len(data), window_size):
-        window = data[i:i+window_size]
-        features_by_window.append(extract_stats_from_window(window, include_quarter_diff, simple_stats))
-    return pd.concat(features_by_window, axis=1).transpose()
+'''
 
-def export_kfolds_split_indices(data: pd.DataFrame, labels: list, export_dir: str, n_splits: int, shuffle: bool, random_state: int = None):
-    '''
-    Splits data into N folds, writing each fold to a directory as a text file.
-    '''
+Preprocessing / Feature Extraction Pipeline
 
-    # extracts all individual subject labels from data index
-    sample_names = list(data.index)
-    subject_names = list(dict.fromkeys(['_'.join(name.split(sep='_')[0:2]) for name in sample_names]))
-    subject_labels = [int(name[0]) for name in subject_names]
-
-    print(subject_names)
-    print(len(subject_names))
-    print(subject_labels)
-    print(len(subject_labels))
-
-    print(subject_names)
-
-    kf = StratifiedKFold(n_splits=n_splits, 
-               shuffle=shuffle, 
-               random_state=random_state)
-
-    for i, (train_index, test_index) in enumerate(kf.split(subject_names, subject_labels)):
-        
-        train_subjects = [name for i, name in enumerate(subject_names) if i in train_index]
-        train_names = []
-        for subject_name in train_subjects:
-            train_names += [name for name in sample_names if (subject_name + '_') in name]
-        
-        test_subjects = [name for i, name in enumerate(subject_names) if i in test_index]
-        test_names = []
-        for subject_name in test_subjects:
-            test_names += [name for name in sample_names if (subject_name + '_') in name]
-
-        train_filename = f"fold{i}t.txt"
-        test_filename = f"fold{i}e.txt"   
-
-        # write names to files in the kfolds folder
-        with open(os.path.join(export_dir, train_filename), "w") as file:
-            for name in train_names:
-                file.write(name + "\n")
-        with open(os.path.join(export_dir, test_filename), "w") as file:
-            for name in test_names:
-                file.write(name + "\n")
+'''
 
 def process_data_folds(data, kfolds, preprocessing_settings, feature_settings=None):
-    
-    # data = pd.read_csv(data_directory, index_col=0)
-    # kfolds = []
-    # for i in range(NUM_FOLDS):
-    #     train_index = []
-    #     test_index = []
-    #     with open(kfolds_directory + f"/fold{i}t.txt", "r") as tfile:
-    #         for sample_name in tfile:
-    #             train_index.append(sample_name.strip())
-    #     with open(kfolds_directory + f"/fold{i}e.txt", "r") as efile:
-    #         for sample_name in efile:
-    #             test_index.append(sample_name.strip())
-    #     kfolds.append((train_index, test_index))
-    
+    '''
+    Runs the entire data processing pipeline
+
+    Args
+    - data - the raw data dataframe
+    - preprocessing_settings - settings dictionary for `preprocess_train_test_dataframes()`
+    - feature_settings - settings dictionary for `_create_long_feature_dataframe()` and `_create_feature_dataframe()`
+
+    Returns
+    - a list of (DataFrame, DataFrame, list, list) tuples containing the final X_train, X_test, y_train, y_test data
+    '''
     dataframes = []
     for i in tqdm(range(len(kfolds)),ncols=50):
         # extract train/test index names
@@ -421,7 +505,7 @@ def process_data_folds(data, kfolds, preprocessing_settings, feature_settings=No
         
         if preprocessing_settings['resample']:
             # apply smote to training set
-            X_train, y_train = apply_smote(X_train, y_train, 0.1)
+            X_train, y_train = _apply_smote(X_train, y_train, 0.1)
         
         # preprocess data accordingly for the model
         (X_train, X_test) = preprocess_train_test_dataframes(
@@ -432,15 +516,15 @@ def process_data_folds(data, kfolds, preprocessing_settings, feature_settings=No
        
         # extract features
         if feature_settings['use_feature'] and feature_settings['long_feature']:
-            X_train = create_long_feature_dataframe(X_train, window_size=feature_settings['window_size'], 
+            X_train = _create_long_feature_dataframe(X_train, window_size=feature_settings['window_size'], 
                                                     include_quarter_diff=feature_settings['quarter_diff'],
                                                     simple_stats=feature_settings['simple'])
-            X_test = create_long_feature_dataframe(X_test, window_size=feature_settings['window_size'], 
+            X_test = _create_long_feature_dataframe(X_test, window_size=feature_settings['window_size'], 
                                                    include_quarter_diff=feature_settings['quarter_diff'],
                                                    simple_stats=feature_settings['simple'])
         elif feature_settings['use_feature']:
-            X_train = create_feature_dataframe(X_train, feature_settings['quarter_diff'], simple_stats=feature_settings['simple'])
-            X_test = create_feature_dataframe(X_test, feature_settings['quarter_diff'], simple_stats=feature_settings['simple'])
+            X_train = _create_feature_dataframe(X_train, feature_settings['quarter_diff'], simple_stats=feature_settings['simple'])
+            X_test = _create_feature_dataframe(X_test, feature_settings['quarter_diff'], simple_stats=feature_settings['simple'])
         dataframes.append((X_train, X_test, y_train, y_test))
 
     return dataframes

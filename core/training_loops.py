@@ -1,5 +1,3 @@
-import os
-
 import pandas as pd
 import torch
 from tqdm import tqdm
@@ -11,6 +9,16 @@ from xgboost import XGBClassifier
 from core.engine import train_test
 from core.eval import eval_model, eval_sklearn_model, append_weighted_average
 from core.model import ZeroR, ConvNN, LSTM, FeatureMLP, LSTM_Feature, ConvLSTM
+
+'''
+FILE DOCUMENTATION
+
+Each function corresponds to the training and evaluation process of a model.
+Parameters include the training + test data, loss functions, device (for pytorch models),
+and other model specific parameters.
+
+They all return an evaluation results dataframe of a standardized format across all models.
+'''
 
 def run_linear_svc(data: list, criterion, device, weights = None):
     print("Linear SVM Classifier:")
@@ -69,7 +77,8 @@ def run_random_forest(data: list, criterion, device, weights = None, n_estimator
                                              max_features=max_features,
                                              min_samples_split=min_samples_split,
                                              min_samples_leaf=min_samples_leaf,
-                                             bootstrap=bootstrap)
+                                             bootstrap=bootstrap,
+                                             class_weight=weights)
             # train model
             model_2.fit(X_train, y_train)
             forest_results.append(
