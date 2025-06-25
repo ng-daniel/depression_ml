@@ -32,19 +32,22 @@ hyperparameter_grid = {
     'min_child_weight' : [1, 5, 10],
     'subsample' : [0.6, 0.8, 1],
     'colsample_bytree' : [0.6, 0.8, 1],
+    'learning_rate' : [0.1, 0.3]
 }
 use_grid_search = True
 
 preprocessing_settings = {
     'resample' : True,
-    'log_base' : 10,
-    'scale_range' : (-1,1),
-    'use_standard' : False,
-    'use_gaussian' : 100
+    'log_base' : None,
+    'scale_range' : None,
+    'use_standard' : True,
+    'use_gaussian' : 50,
+    'subtract_mean' : True,
+    'adjust_seasonality' : True
 }
 feature_settings = {
     'use_feature' : True,
-    'long_feature' : True,
+    'long_feature' : False,
     'window_size' : 30,
     'quarter_diff' : False,
     'simple' : True

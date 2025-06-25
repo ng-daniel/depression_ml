@@ -79,7 +79,7 @@ for (X_train, X_test, y_train, y_test) in dataframes:
 
 # setup output directory, class weights, and loss function, 
 # aka criterion, for model training and evaluation
-class_weights = torch.tensor([1.1]).to(device)
+class_weights = torch.tensor([1]).to(device)
 class_weights_dict = {
       0 : 1,
       1 : class_weights.item()

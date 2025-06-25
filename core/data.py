@@ -386,8 +386,8 @@ def _extract_stats_from_window(data: pd.Series, include_quarter_diff = False, si
     labels = []
 
     # loading descriptive statistics
-    labels.extend(['mean', 'std',  'max', 'min'])
-    stats.extend([data_np.mean(), data_np.std(), data_np.max(), data_np.min()])
+    labels.extend(['mean', 'median', 'std',  'max', 'min'])
+    stats.extend([data_np.mean(), data_np[len(data_np)//2], data_np.std(), data_np.max(), data_np.min()])
 
     if not simple_stats:
         # calculating half window statistics

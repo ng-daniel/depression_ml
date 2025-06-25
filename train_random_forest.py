@@ -35,7 +35,7 @@ hyperparameter_grid = {
     'min_samples_leaf': [1, 2],
     'bootstrap': [True, False]
 }
-use_grid_search = True
+use_grid_search = False
 
 preprocessing_settings = {
     'resample' : False,
@@ -50,7 +50,7 @@ preprocessing_settings = {
 feature_settings = {
     'use_feature' : True,
     'long_feature' : True,
-    'window_size' : 30,
+    'window_size' : 60,
     'quarter_diff' : False,
     'simple' : True
 }

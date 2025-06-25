@@ -30,7 +30,8 @@ preprocessing_settings = {
     'scale_range' : None,
     'use_standard' : True,
     'use_gaussian' : 50,
-    'adjust_seasonality' : False,
+    'subtract_mean' : True,
+    'adjust_seasonality' : True,
     'batch_size' : 32
 }
 feature_settings = {

@@ -33,13 +33,13 @@ preprocessing_settings = {
     'log_base' : None,
     'scale_range' : None,
     'use_standard' : True,
-    'use_gaussian' : None,
-    'subtract_mean' : False,
+    'use_gaussian' : 50,
+    'subtract_mean' : True,
     'adjust_seasonality' : True
 }
 feature_settings = {
     'use_feature' : True,
-    'long_feature' : True,
+    'long_feature' : False,
     'window_size' : 30,
     'quarter_diff' : False,
     'simple' : True

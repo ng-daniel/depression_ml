@@ -32,7 +32,7 @@ GRID_SEARCH = True
 preprocessing_settings = {
     'resample' : True,
     'log_base' : None,
-    'scale_range' : None,
+    'scale_range' : (0,1),
     'use_standard' : True,
     'use_gaussian' : 50,
     'adjust_seasonality' : False,
@@ -48,7 +48,7 @@ feature_settings = {
 hyperparameter_settings = {
     'learning_rate' : 0.0004,
     'weight_decay' : 1e-4,
-    'epochs' : 75,
+    'epochs' : 50,
     'out_shape' : 1,
     'hidden_shape' : 64,
     'lstm_layers' : 8
