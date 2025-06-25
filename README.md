@@ -11,8 +11,7 @@ In the end, I was able to beat the "Depresjon" paper's baseline results, improvi
 
 ## You're Telling Me A Pipeline Preprocessed This Data?
 
-The Depresjon Dataset consists of 55 subjects, with an average of 12-13 days of data each. The data is recorded in minute intervals.\
-Here's a .csv snippet of the control_1 subject:
+The Depresjon Dataset consists of 55 subjects, with an average of 12-13 days of data each. The data is recorded in minute intervals. Here's a `.csv` snippet of the control_1 subject:
 
 | timestamp | date | activity |
 |-----------|------|----------|
