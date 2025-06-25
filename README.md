@@ -3,11 +3,30 @@
 This repo is all the machine learning pipelines and code I wrote in Python for rapid experimentation of various machine learning models and preprocessing techniques. 
 I learned so much through this project, and if you want the details and a couple figures, it's all here so go ham.
 
-For the short version, this project is about relationship between physical movement patterns and depression, and trying to detect this with machine learning. The dataset, called "Depresjon", contains motion data from 55 subjects-- some depressed, some non-depressed(Enrique).
+For the short version, this project is about relationship between physical movement patterns and depression, and trying to detect this with machine learning. The dataset, called "Depresjon", contains motion data from 55 subjects-- some depressed, some non-depressed(Enrique et al).
 
-After confirming that there is at least *some* difference between the classes so I'm not completely wasting my time, I split the data using 5 fold cross validation, preprocessed data for model input, trained various models on the data, and evaluated their respective performance. 
+After confirming that there is at least *some* difference between the classes so I'm not completely wasting my time, I split the data using **5 fold** cross validation, **preprocessed** data for model input, **trained** various models on the data, and **evaluated** their respective performance. 
 
 In the end, I was able to beat the "Depresjon" paper's baseline results, improving on both accuracy and f1score. It wasn't by much, but a win is a win :) and I've tinkered with this repo for way too long so I'm leaving it at that.
+
+## You're Telling Me A Pipeline Preprocessed This Data?
+
+The Depresjon Dataset consists of 55 subjects, with an average of 12-13 days of data each. The data is recorded in minute intervals.\
+Here's a .csv snippet of the control_1 subject:
+
+| timestamp | date | activity |
+|-----------|------|----------|
+| 2003-03-18 15:00:00 | 2003-03-18 | 60 |
+| 2003-03-18 15:01:00 | 2003-03-18 | 0 |
+| 2003-03-18 15:02:00 | 2003-03-18 | 264 |
+| 2003-03-18 15:03:00 | 2003-03-18 | 662 |
+| 2003-03-18 15:04:00 | 2003-03-18 | 293 |
+
+The `timestamp` and `date` columns are self explanatory, but the `activity` column needs some more info. During data collection, subjects wore a motion traching watch that sampled at 32 hz for movements above 0.05 g, or ~0.5 m/s(Enrique et al). The `activity` column records the number of recorded movements for the duration of that minute.
+
+Part of why I loved working on this dataset was that it's pretty challenging, for a few reasons:
+1. **Small dataset**. With only ~700 labeled samples, the big-picture trends are harder to detect.
+2. **Imbalanced Classes**. 32 control subjects v.s. only 23 condition subjects means models lean towards the majority class.
 
 ## References That I Definitely Didn't Make Up
 
