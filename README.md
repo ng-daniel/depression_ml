@@ -1,16 +1,13 @@
 # Machine Learning for Detecting Depression from Motion Data
 
 This repo is all the machine learning pipelines and code I wrote in Python for rapid experimentation of various machine learning models and preprocessing techniques. 
-I learned so much through this project, and if you want the details and a couple figures, it's all here (I promise to keep it brief!).
+I learned so much through this project, and if you want the details and a couple figures, it's all here so go ham.
 
-For the short version, this project is about relationship between physical movement patterns and depression, and trying to detect this with machine learning. The dataset, called "Depresjon", contains motion data from 55 subjects-- some depressed, some non-depressed(Enrique). After confirming that there is at least *some* difference between the classes so I'm not completely wasting my time, I split the data using 5 fold cross validation, preprocessed data for model input, trained various models on the data, and evaluated their respective performance. In the end, I was able to improve on the 
+For the short version, this project is about relationship between physical movement patterns and depression, and trying to detect this with machine learning. The dataset, called "Depresjon", contains motion data from 55 subjects-- some depressed, some non-depressed(Enrique).
 
-which led me to the actual paper that published the data(Enrique),  
+After confirming that there is at least *some* difference between the classes so I'm not completely wasting my time, I split the data using 5 fold cross validation, preprocessed data for model input, trained various models on the data, and evaluated their respective performance. 
 
-learning. Additionally, this was an opportunity for me to refine my skills in machine learning.
-
-
-I found this dataset on Kaggle, and it attracted me because the 
+In the end, I was able to beat the "Depresjon" paper's baseline results, improving on both accuracy and f1score. It wasn't by much, but a win is a win :) and I've tinkered with this repo for way too long so I'm leaving it at that.
 
 ## References That I Definitely Didn't Make Up
 
