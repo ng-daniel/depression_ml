@@ -29,10 +29,9 @@ RESULTS_DIR = "results"
 preprocessing_settings = {
     'resample' : True,
     'log_base' : None,
-    'scale_range' : None,
+    'scale_range' : (0,1),
     'use_standard' : True,
     'use_gaussian' : 30,
-    'subtract_mean' : True,
     'adjust_seasonality' : True,
 }
 feature_settings = {

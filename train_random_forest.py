@@ -15,7 +15,7 @@ from sklearn.model_selection import GridSearchCV, RandomizedSearchCV
 from sklearn.ensemble import RandomForestClassifier
 from core.data import create_dataloaders, process_data_folds
 from core.training_loops import run_random_forest
-from core.eval import create_metrics_table
+from core.eval import combine_several_weighted_averages
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -43,7 +43,6 @@ preprocessing_settings = {
     'scale_range' : None,
     'use_standard' : True,
     'use_gaussian' : None,
-    'subtract_mean' : False,
     'adjust_seasonality' : False,
     'window_size' : 30
 }
@@ -126,7 +125,4 @@ forest_results = run_random_forest(
 print(forest_results)
 print(hyperparameter_settings)
 forest_results.to_csv(os.path.join(RESULTS_DIR, "random_forest.csv"))
-metrics = create_metrics_table([forest_results])
-print(metrics)
-
 print("Done.")

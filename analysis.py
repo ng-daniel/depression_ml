@@ -7,7 +7,7 @@ from core.data import preprocess_train_test_dataframes
 from core.util import data_mean_med_std
 
 SEED = random.randint(0,32768)
-DIR = "graphics"
+DIR = "figures"
 
 def get_time_index():
     '''
@@ -88,12 +88,11 @@ def plot_random_samples(data_control:pd.DataFrame, data_condition:pd.DataFrame, 
     return (fig, ax)
 
 data = pd.read_csv("data/processed_dataframes/data_raw.csv", index_col=0)
-
 data_control = data[data['label'] == 0].copy().drop(labels=['label'], axis=1)
 data_condition = data[data['label'] == 1].copy().drop(labels=['label'], axis=1)
 
 NUM_RANDOM = 5
-fig, ((ax1, ax2), (ax3, ax4), (ax5, ax6)) = plt.subplots(3, 2, figsize=(8,12))
+fig, ((ax1, ax2), (ax3, ax4), (ax5, ax6)) = plt.subplots(3, 2, figsize=(12,12))
 fig.tight_layout(pad=3)
 data_mean_trend_plot(data_control=data_control, 
                      data_condition=data_condition, 

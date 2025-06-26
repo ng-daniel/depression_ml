@@ -37,17 +37,16 @@ hyperparameter_grid = {
 use_grid_search = True
 
 preprocessing_settings = {
-    'resample' : True,
+    'resample' : False,
     'log_base' : None,
-    'scale_range' : None,
-    'use_standard' : True,
+    'scale_range' : (0,1),
+    'use_standard' : None,
     'use_gaussian' : 50,
-    'subtract_mean' : True,
     'adjust_seasonality' : True
 }
 feature_settings = {
     'use_feature' : True,
-    'long_feature' : False,
+    'long_feature' : True,
     'window_size' : 30,
     'quarter_diff' : False,
     'simple' : True
