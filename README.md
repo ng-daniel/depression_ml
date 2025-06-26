@@ -155,7 +155,8 @@ Macro averages of 5-Fold cross validation. Best metrics are in bold.
 
 <sup>\*Even with 5 fold cross validation, all neural networks saw significant instability in evaluation metrics between identical experiments due to their nondeterministic nature. To fix this, I ran an additional 29 trials for each neural network and averaged the results to better represent their true performance.</sup>
 
-![3 labeled heatmaps depicting model results](./figures/heatmaps.png)
+![3 labeled heatmaps depicting model results](./figures/heatmaps_macro.png)
+![3 labeled heatmaps depicting model results](./figures/heatmaps_weighted.png)
 
 ## References That I Definitely Didn't Make Up
 
