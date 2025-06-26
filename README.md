@@ -120,43 +120,42 @@ Since I was working on a similar project at the time, I got some ideas for poten
 
 Brief show and tell synopsis of the models I selected and why. Go to each model's respective training module if you want to see the specific preprocessing settings I found to work best. Visit `core/model.py` to see the neural network architecture.
 
-| Not Neural Networks           | brief desc.                                                    |
-| ----------------------------- | -------------------------------------------------------------- |
-| Zero Rule Baseline            | Stubborn little thing that always predicts the majority class. |
-| Random Forest                 | Solid ensemble model.                                          |
-| XGBoost                       | Random Forest's gradient boosted little cousin.                |
-| Linear Support Vector Machine | Best performing Depresjon baseline.                            |
+| Not Neural Networks           |                                                 |
+| ----------------------------- | ----------------------------------------------- |
+| Zero Rule Baseline            | No thoughts, only predicts the majority class.  |
+| Random Forest                 | Solid ensemble model.                           |
+| XGBoost                       | Random Forest's gradient boosted little cousin. |
+| Linear Support Vector Machine | Best performing Depresjon baseline.             |
 
-| Neural Networks             | brief desc.                                                         |
-| --------------------------- | ------------------------------------------------------------------- |
-| 1D CNN                      | Lightweight feature extraction                                      |
-| CNN LSTM Hybrid             | 1d CNN with more serious temporal shenanigans                       |
-| Multilayer Perceptron (MLP) | Wow. What a classic. Beautiful                                      |
-| Feature LSTM                | LSTM model with sliding window features instead of pure motion data |
+| Neural Networks             |                                                                      |
+| --------------------------- | -------------------------------------------------------------------- |
+| Multilayer Perceptron (MLP) | Classic.                                                             |
+| 1D CNN                      | Lightweight feature extraction.                                      |
+| LSTM                        | Great for time series data.                                          |
+| CNN LSTM Hybrid             | 1d CNN with more serious temporal shenanigans.                       |
+| Feature LSTM                | LSTM model with sliding window features instead of pure motion data. |
 
 ### Evaluation Metrics
 
 Though I used SMOTE earlier to address the class imbalance in the training set, the evaluation dataset is still imbalanced. Therefore, it is still important that we select metrics that are resistant to imbalanced classes(thanks Depresjon for the suggestions).
 
-| name      | abreviaton | desc                                                                         |
-| --------- | ---------- | ---------------------------------------------------------------------------- |
-| Accuracy  | acc        | % of correct predictions.                                                    |
-| Precision | prec       | % of correct positive predictions out of all positive predictions.           |
-| Recall    | rec        | % of actual positives identified.                                            |
-| F1-Score  | f1sc       | Harmonic mean of precision and recall.                                       |
-| MCC       | mcc        | Matthews Correlation Coefficient, a balanced measure for imbalanced classes. |
+| name      | abreviaton | range  | description                                                                  |
+| --------- | ---------- | ------ | ---------------------------------------------------------------------------- |
+| Accuracy  | acc        | [0,1]  | % of correct predictions.                                                    |
+| Precision | prec       | [0,1]  | % of correct positive predictions out of all positive predictions.           |
+| Recall    | rec        | [0,1]  | % of actual positives identified.                                            |
+| F1-Score  | f1sc       | [0,1]  | Harmonic mean of precision and recall.                                       |
+| MCC       | mcc        | [-1,1] | Matthews Correlation Coefficient, a balanced measure for imbalanced classes. |
 
-With the main goal being identifying depressed individuals, the aim should be to **maximize recall** for the condition class without sacrificing other metrics like F1-Score or the MCC.
+With the main goal being identifying depressed individuals, the ideal model would **maximize recall** for the condition class without over-sacrificing other metrics like F1-Score or the MCC.
 
-### Results
+## Results
 
-Weighted averages of 5-Fold cross validation.
+Macro averages of 5-Fold cross validation. Best metrics are in bold.
+
+<sup>\*Even with 5 fold cross validation, all neural networks saw significant instability in evaluation metrics between identical experiments due to their nondeterministic nature. To fix this, I ran an additional 29 trials for each neural network and averaged the results to better represent their true performance.</sup>
 
 ![3 labeled heatmaps depicting model results](./figures/heatmaps.png)
-
-Even with 5 fold cross validation, all neural networks saw significant instability in evaluation metrics between identical experiments due to their nondeterministic nature. To fix this, I ran an additional 29 trials and averaged the results for each neural network to better represent their true performance.
-
-## Discussion and Conclusions
 
 ## References That I Definitely Didn't Make Up
 
