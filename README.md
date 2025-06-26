@@ -120,24 +120,28 @@ Since I was working on a similar project at the time, I got some ideas for poten
 
 Brief show and tell synopsis of the models I selected and why. Go to each model's respective training module if you want to see the specific preprocessing settings I found to work best. Visit `core/model.py` to see the neural network architecture.
 
-| Not Neural Networks           |                                                 |
-| ----------------------------- | ----------------------------------------------- |
-| Zero Rule Baseline            | No thoughts, only predicts the majority class.  |
-| Random Forest                 | Solid ensemble model.                           |
-| XGBoost                       | Random Forest's gradient boosted little cousin. |
-| Linear Support Vector Machine | Best performing Depresjon baseline.             |
+### Machine Learning Models
 
-| Neural Networks             |                                                                      |
-| --------------------------- | -------------------------------------------------------------------- |
-| Multilayer Perceptron (MLP) | Classic.                                                             |
-| 1D CNN                      | Lightweight feature extraction.                                      |
-| LSTM                        | Great for time series data.                                          |
-| CNN LSTM Hybrid             | 1d CNN with more serious temporal shenanigans.                       |
-| Feature LSTM                | LSTM model with sliding window features instead of pure motion data. |
+| name                          | python class name      | description                                     |
+| ----------------------------- | ---------------------- | ----------------------------------------------- |
+| Zero Rule Baseline            | ZeroR                  | No thoughts, only predicts the majority class.  |
+| Random Forest                 | RandomForestClassifier | Solid ensemble model.                           |
+| XGBoost                       | XGBClassifier          | Random Forest's gradient boosted little cousin. |
+| Linear Support Vector Machine | SVC                    | Best performing Depresjon baseline.             |
+
+### Neural Network Architecture Models
+
+| name                        | python class name | description                                                          |
+| --------------------------- | ----------------- | -------------------------------------------------------------------- |
+| Multilayer Perceptron (MLP) | FeatureMLP        | Classic.                                                             |
+| 1D CNN                      | ConvNN            | Lightweight feature extraction.                                      |
+| LSTM                        | LSTM              | Great for time series data.                                          |
+| CNN LSTM Hybrid             | ConvLSTM          | 1d CNN with more serious temporal shenanigans.                       |
+| Feature LSTM                | LSTM_Feature      | LSTM model with sliding window features instead of pure motion data. |
 
 ### Evaluation Metrics
 
-Though I used SMOTE earlier to address the class imbalance in the training set, the evaluation dataset is still imbalanced. Therefore, it is still important that we select metrics that are resistant to imbalanced classes(thanks Depresjon for the suggestions).
+Though I used SMOTE earlier to address the class imbalance in the training set, the evaluation dataset is still imbalanced. Therefore, it is still important that we select metrics that are resistant to imbalanced classes(thanks Depresjon for the metric suggestions).
 
 | name      | abreviaton | range  | description                                                                  |
 | --------- | ---------- | ------ | ---------------------------------------------------------------------------- |
@@ -147,16 +151,17 @@ Though I used SMOTE earlier to address the class imbalance in the training set, 
 | F1-Score  | f1sc       | [0,1]  | Harmonic mean of precision and recall.                                       |
 | MCC       | mcc        | [-1,1] | Matthews Correlation Coefficient, a balanced measure for imbalanced classes. |
 
-With the main goal being identifying depressed individuals, the ideal model would **maximize recall** for the condition class without over-sacrificing other metrics like F1-Score or the MCC.
-
-## Results
-
-Macro averages of 5-Fold cross validation. Best metrics are in bold.
+With the main goal being identifying depressed individuals from motion data, the ideal metrics would **maximize recall on the depressed class without over-sacrificing other metrics** like F1-Score or the MCC.
 
 <sup>\*Even with 5 fold cross validation, all neural networks saw significant instability in evaluation metrics between identical experiments due to their nondeterministic nature. To fix this, I ran an additional 29 trials for each neural network and averaged the results to better represent their true performance.</sup>
 
-![3 labeled heatmaps depicting model results](./figures/heatmaps_macro.png)
-![3 labeled heatmaps depicting model results](./figures/heatmaps_weighted.png)
+## Results
+
+Final metrics of 5-Fold cross validation visualized with heatmaps. **Best metrics are in bold.**
+
+![4 labeled heatmaps depicting model results](./figures/heatmap_results.png)
+
+Overall, the best performing classifier with unweighted macro averages is the 1d CNN, with a solid MCC score of 0.459 and a recall of 0.726. When weighting the averages by the number of samples in each class, the linear SVM is the new champion
 
 ## References That I Definitely Didn't Make Up
 
