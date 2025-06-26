@@ -1,7 +1,6 @@
 # Machine Learning for Detecting Depression from Motion Data
 
-This repo contains all the machine learning pipelines and code I wrote in Python for rapid experimentation of various machine learning models and preprocessing techniques.
-I learned so much through this project, and if you want the details and a couple figures, I've explained it all as best as I can.
+This repo contains all the machine learning pipelines and code I wrote in Python for rapid experimentation of various machine learning models and preprocessing techniques. I learned so much through this project, and if you want the details and a couple figures, I've explained it all as best as I can.
 
 TODO:
 
@@ -121,12 +120,12 @@ Since I was working on a similar project at the time, I got some ideas for poten
 
 Brief show and tell synopsis of the models I selected and why. Go to each model's respective training module if you want to see the specific preprocessing settings I found to work best. Visit `core/model.py` to see the neural network architecture.
 
-| Not Neural Networks           | brief desc.                                                                                                             |
-| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| Zero Rule Baseline            | Stubborn little thing that always predicts the majority class. Provides a minimum point of comparison for other models. |
-| Random Forest                 | Solid ensemble model.                                                                                                   |
-| XGBoost                       | Random Forest's gradient boosted little cousin.                                                                         |
-| Linear Support Vector Machine | Best performing Depresjon baseline.                                                                                     |
+| Not Neural Networks           | brief desc.                                                    |
+| ----------------------------- | -------------------------------------------------------------- |
+| Zero Rule Baseline            | Stubborn little thing that always predicts the majority class. |
+| Random Forest                 | Solid ensemble model.                                          |
+| XGBoost                       | Random Forest's gradient boosted little cousin.                |
+| Linear Support Vector Machine | Best performing Depresjon baseline.                            |
 
 | Neural Networks             | brief desc.                                                         |
 | --------------------------- | ------------------------------------------------------------------- |
@@ -152,6 +151,8 @@ With the main goal being identifying depressed individuals, the aim should be to
 ### Results
 
 Weighted averages of 5-Fold cross validation.
+
+![3 labeled heatmaps depicting model results](./figures/heatmaps.png)
 
 Even with 5 fold cross validation, all neural networks saw significant instability in evaluation metrics between identical experiments due to their nondeterministic nature. To fix this, I ran an additional 29 trials and averaged the results for each neural network to better represent their true performance.
 

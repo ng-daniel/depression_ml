@@ -137,7 +137,7 @@ def run_zeroR_baseline(data: list, criterion, device):
       zeroR_results = append_weighted_average(zeroR_results)
       return zeroR_results
 
-def run_lstm(data: list, criterion, device, learning_rate, epochs, in_shape, out_shape, hidden_shape, lstm_layers):
+def run_lstm(data: list, criterion, device, learning_rate, weight_decay, epochs, in_shape, out_shape, hidden_shape, lstm_layers):
       print("LSTM:")
       
       lstm_results = []
@@ -148,8 +148,7 @@ def run_lstm(data: list, criterion, device, learning_rate, epochs, in_shape, out
       for i, (train_dataloader, test_dataloader) in enumerate(tqdm(data, ncols=50)):
             # reset model
             model_2 = LSTM(IN_2, OUT_2, HIDDEN_2, LSTM_LAYERS).to(device)
-            
-            optimizer = torch.optim.Adam(params = model_2.parameters(), lr=learning_rate)
+            optimizer = torch.optim.AdamW(params = model_2.parameters(), lr=learning_rate, weight_decay=weight_decay)
             # train model
             train_test(model_2, train_dataloader, test_dataloader, epochs = epochs, optimizer=optimizer, 
                   criterion=criterion, device=device, verbose=True)

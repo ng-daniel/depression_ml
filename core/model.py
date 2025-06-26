@@ -14,22 +14,20 @@ class LSTM(nn.Module):
         self.lstm_layers = lstm_layers
         
         # N * 1 * L * in_shape
-        self.norm = nn.BatchNorm2d(num_features=1)
         # hidden shape = number of Long term memory values
         self.lstm = nn.LSTM(in_shape, hidden_shape, lstm_layers, batch_first=True)
         self.fc = nn.Sequential(
-            # nn.Linear(hidden_shape, hidden_shape),
-            # nn.ReLU(),
+            nn.BatchNorm1d(hidden_shape),
+            nn.Dropout(0,1),
             nn.Linear(hidden_shape, out_shape)
         )
     def forward(self, x):
         # number of LSTM layers * L * hidden shape
         x = x.squeeze(dim=1).unsqueeze(dim=2)
         x = torch.reshape(x, (x.size(0), int(x.size(1) / self.in_shape), self.in_shape))
-        # print(x.shape)
         x, _ = self.lstm(x)
         x = x[:, -1, :]
-        x = self.fc()
+        x = self.fc(x)
         return x
 
 class ZeroR(nn.Module):

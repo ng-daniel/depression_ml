@@ -214,11 +214,14 @@ def create_metrics_table(metric_dataframes: list):
     new_metrics = new_metrics.reset_index(drop=True)
     return new_metrics
 
-def metric_class_averages(metric_df : pd.DataFrame):
+def metric_class_averages(metric_df : pd.DataFrame, weight_support = False):
 
     # calculate class ratio
     support_values = metric_df[['sup0', 'sup1']].copy()
     support_ratio = (support_values['sup0'] / support_values['sup1']).item()
+    print(support_ratio)
+    if weight_support == False:
+        support_ratio = 1
 
     def remove_end_digit(x:str):
         if len(x) == 0:
