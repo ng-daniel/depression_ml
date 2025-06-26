@@ -11,30 +11,37 @@ TODO:
 
 For the short version, this project is about relationship between physical movement patterns and depression, and trying to detect this with machine learning. The dataset, called "Depresjon", contains motion data from 55 subjects-- some depressed, some non-depressed(Enrique et al).
 
-After confirming that there is at least _some_ difference between the classes so I'm not completely wasting my time, I split the data using **5 fold** cross validation, **preprocessed** data for model input, **trained** various models on the data, and **evaluated** their respective performance.
+After confirming that there is at least _some_ difference between the classes so I'm not completely wasting my time, I split the data, **preprocessed** data for model input, **trained** various models on the data, and **evaluated** their respective performance.
 
-In the end, I was able to beat the "Depresjon" paper's baseline results, improving on both accuracy and f1score. It wasn't by much, but a win is a win :) and I've tinkered with this repo for way too long so I'm leaving it at that.
+In the end, I was able to beat the "Depresjon" paper's baseline results, improving on multiple key metrics. It wasn't by an extreme amount, but a win is a win :) and I've tinkered with this repo for way too long so I'm leaving it at that.
 
 Future work could be to explore different features for the data or to develop a lightweight application where users can upload their own data and figure out their likelihood of having depression based on the models.
 
-## File structure
+## Directory Map
 
 ```
 depression
-├───core                    // functions for core operations
+├───core                    # core functions for preprocessing,
+│                             training, evaluation, etc.
 │
-├───data                    // raw data files and fold information
-│   ├───condition               // depressed data from Depresjon
-│   ├───control                 // non-depressed data from Depresjon
-│   └───processed_dataframes
-│       └───kfolds                  // .txt files with sample names
-│                                      for train(t) and eval(e) folds
+├───data                    # .csv data files from Depresjon
+│   ├───condition
+│   ├───control
+│   └───processed_dataframes    # reformatted samples
+│       └───kfolds                  # .txt files with sample names
+│                                     for cross val folds
 │
-├───figures                 // look at these photographs
-│───results                 // .csv files of experiment and final results
+├───figures                 # figures, graphs, charts and stuff
+│───results                 # .csv files of experiment results
 │
-│───analysis.py
-└
+│─analysis.py           # visualizing samples and preprocessing
+│─load_data.py          # aggregating samples and creating folds
+│─README.md             # oh god it's an infinite loop get me out
+│─results.py            # formatting and visualizing results
+│
+│─train_A.py            # training modules for respective models
+...
+└─train_Z.py
 ```
 
 ## You're Telling Me A Pipeline Preprocessed This Data?
@@ -58,6 +65,12 @@ Challenges with the dataset:
 3. **Noisy Data**. On a minute level, movement patterns throughout the day are very erratic and hinder model predictions.
 
 Preprocessing Pipeline
+
+## Feature Creatures
+
+## Models
+
+## Results
 
 ## References That I Definitely Didn't Make Up
 
