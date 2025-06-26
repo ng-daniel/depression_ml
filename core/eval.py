@@ -214,13 +214,25 @@ def create_metrics_table(metric_dataframes: list):
     new_metrics = new_metrics.reset_index(drop=True)
     return new_metrics
 
-def metric_class_averages(metric_df : pd.DataFrame, weight_support = False):
+def metric_class_averages(metric_df : pd.DataFrame):
+    '''
+    Creates a metric dataframe of 4 rows:
+
+    1. Control class metrics
+    2. Condition class metrics
+    3. Macro average
+    4. Weighted average
+
+    Args
+    - metric_df - the original metric dataframe
+
+    Returns
+    - the new reformatted dataframe
+    '''
 
     # calculate class ratio
     support_values = metric_df[['sup0', 'sup1']].copy()
     support_ratio = (support_values['sup0'] / support_values['sup1']).item()
-    if weight_support == False:
-        support_ratio = 1
 
     def remove_end_digit(x:str):
         if len(x) == 0:
@@ -244,13 +256,16 @@ def metric_class_averages(metric_df : pd.DataFrame, weight_support = False):
 
     def weighted_avg(x:pd.Series, ratio:float):
         val = x.iloc[0]
-        if isinstance(val, (int, float)):
-            return (x.iloc[0] * ratio + x.iloc[1]) / (1 + ratio)
-        return val
+        if isinstance(val, (int, float)) == False:
+            return pd.Series([val, val])
+        weighted_avg = (x.iloc[0] * ratio + x.iloc[1]) / (1 + ratio)
+        macro_avg = (x.iloc[0] + x.iloc[1]) / 2
+        return pd.Series([macro_avg, weighted_avg])
+
 
     # calculate weighted average
     metric_avg = metrics_new.apply(weighted_avg, axis=0, args=(support_ratio,))
-    metric_avg['note'] = 'wt_avg'
-    metrics_new = pd.concat([metrics_new, pd.DataFrame(metric_avg).transpose()], axis=0)
+    metric_avg['note'] = pd.Series(['macro_avg', 'wt_avg'])
+    metrics_new = pd.concat([metrics_new, metric_avg], axis=0)
     return metrics_new
     
