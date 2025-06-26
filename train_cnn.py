@@ -35,11 +35,7 @@ preprocessing_settings = {
     'adjust_seasonality' : True,
 }
 feature_settings = {
-    'use_feature' : False,
-    'long_feature' : True,
-    'window_size' : 30,
-    'quarter_diff' : False,
-    'simple' : True
+    'use_feature' : False
 }
 hyperparameter_settings = {
     'learning_rate' : 0.000005,

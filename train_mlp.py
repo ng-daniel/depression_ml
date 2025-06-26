@@ -33,15 +33,14 @@ preprocessing_settings = {
     'scale_range' : None,
     'use_standard' : True,
     'use_gaussian' : 30,
-    'window_size' : 30,
-    'batch_size' : 32
+    'adjust_seasonality' : True,
 }
 feature_settings = {
     'use_feature' : True,
     'long_feature' : True,
     'window_size' : 60,
-    'quarter_diff' : True,
-    'simple' : False
+    'quarter_diff' : False,
+    'simple' : True
 }
 hyperparameter_settings = {
     'learning_rate' : 0.0005,

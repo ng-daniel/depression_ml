@@ -92,7 +92,7 @@ data_control = data[data['label'] == 0].copy().drop(labels=['label'], axis=1)
 data_condition = data[data['label'] == 1].copy().drop(labels=['label'], axis=1)
 
 NUM_RANDOM = 5
-fig, ((ax1, ax2), (ax3, ax4), (ax5, ax6)) = plt.subplots(3, 2, figsize=(12,12))
+fig, ((ax1, ax2), (ax3, ax4), (ax5, ax6), (ax7, ax8)) = plt.subplots(4, 2, figsize=(12,12))
 fig.tight_layout(pad=3)
 data_mean_trend_plot(data_control=data_control, 
                      data_condition=data_condition, 
@@ -132,12 +132,11 @@ plot_random_samples(data_control,
                     ylabel='Value')
 
 preprocessing_settings = {
-    'resample' : True,
+    'resample' : False,
     'log_base' : None,
     'scale_range' : (0,1),
-    'use_standard' : True,
-    'use_gaussian' : 30,
-    'adjust_seasonality' : True,
+    'use_standard' : None,
+    'use_gaussian' : 30
 }
 (processed_data, _) = preprocess_train_test_dataframes(
     X_train=data.drop(labels=['label'], axis=1),
@@ -149,13 +148,40 @@ data_condition = processed_data[processed_data['label'] == 1].copy().drop(labels
 data_mean_trend_plot(data_control=data_control, 
                      data_condition=data_condition, 
                      stat='mean',
-                     title='De-Noised Adjusted Data',
+                     title='De-noised Data',
                      ax=ax5,
                      ylabel='Value')
 plot_random_samples(data_control, 
                     data_condition, 
                     n_random=NUM_RANDOM, 
                     ax=ax6,
+                    ylabel='Value')
+
+preprocessing_settings = {
+    'resample' : False,
+    'log_base' : None,
+    'scale_range' : (0,1),
+    'use_standard' : True,
+    'use_gaussian' : 30,
+    'adjust_seasonality' : True
+}
+(processed_data, _) = preprocess_train_test_dataframes(
+    X_train=data.drop(labels=['label'], axis=1),
+    settings=preprocessing_settings
+)
+processed_data['label'] = data['label']
+data_control = processed_data[processed_data['label'] == 0].copy().drop(labels=['label'], axis=1)
+data_condition = processed_data[processed_data['label'] == 1].copy().drop(labels=['label'], axis=1)
+data_mean_trend_plot(data_control=data_control, 
+                     data_condition=data_condition, 
+                     stat='mean',
+                     title='Seasonally Adjusted Data',
+                     ax=ax7,
+                     ylabel='Value')
+plot_random_samples(data_control, 
+                    data_condition, 
+                    n_random=NUM_RANDOM, 
+                    ax=ax8,
                     ylabel='Value')
 
 fig.savefig(os.path.join(DIR, "preprocessing.png"))

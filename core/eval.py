@@ -248,6 +248,7 @@ def metric_class_averages(metric_df : pd.DataFrame):
 
     # calculate weighted average
     metric_avg = metrics_new.apply(weighted_avg, axis=0, args=(support_ratio,))
+    metric_avg['note'] = 'wt_avg'
     metrics_new = pd.concat([metrics_new, pd.DataFrame(metric_avg).transpose()], axis=0)
     return metrics_new
     

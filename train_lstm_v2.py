@@ -36,7 +36,6 @@ preprocessing_settings = {
     'use_standard' : True,
     'use_gaussian' : 50,
     'adjust_seasonality' : False,
-    'window_size' : 30
 }
 feature_settings = {
     'use_feature' : True,
@@ -92,7 +91,7 @@ NUM_FEATURES = len(dataframes[0][0].columns)
 print("Evaluating model...")
 
 lstm_v2_results_list = []
-for i in tqdm(range(20), ncols=50):
+for i in tqdm(range(30), ncols=50):
     lstm_v2_results = run_lstm_feature(
         data=dataloaders,
         criterion=criterion,
@@ -104,12 +103,12 @@ for i in tqdm(range(20), ncols=50):
         out_shape=hyperparameter_settings['out_shape'],
         hidden_shape=hyperparameter_settings['hidden_shape'],
         lstm_layers=hyperparameter_settings['lstm_layers'],
-        window_size=preprocessing_settings['window_size']
+        window_size=feature_settings['window_size']
     )
     lstm_v2_results_list.append(lstm_v2_results)
     print(lstm_v2_results)
 metrics = combine_several_weighted_averages(lstm_v2_results_list)
-metrics.to_csv(os.path.join(RESULTS_DIR, "lstm_v2_20_metrics.csv"))
+metrics.to_csv(os.path.join(RESULTS_DIR, "lstm_v2_30_metrics.csv"))
 print(metrics)
 
 print("Done.")

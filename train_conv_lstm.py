@@ -103,7 +103,7 @@ NUM_FEATURES = len(dataframes[0][0].columns)
 
 print("Evaluating model...")
 conv_lstm_results_list = []
-for i in tqdm(range(20), ncols=50):
+for i in tqdm(range(30), ncols=50):
     conv_lstm_results = run_conv_lstm(
         data=dataloaders,
         criterion=criterion,
@@ -119,7 +119,7 @@ for i in tqdm(range(20), ncols=50):
     conv_lstm_results_list.append(conv_lstm_results)
     print(conv_lstm_results)
 metrics = combine_several_weighted_averages(conv_lstm_results_list)
-metrics.to_csv(os.path.join(RESULTS_DIR, "conv_lstm_20_metrics.csv"))
+metrics.to_csv(os.path.join(RESULTS_DIR, "conv_lstm_30_metrics.csv"))
 print(metrics)
 
 print("Done.")
