@@ -277,7 +277,6 @@ def preprocess_train_test_dataframes(
     - scale_range - (int, int) tuple of the minmax range, None for no minmax scaling
     - use_standard - boolean for standard scaling(overriden by scale_range)
     - use_gaussian - sigma value for gaussian denoising/smoothing, None for no smoothing
-    - subtract_mean - boolean for subtracting the mean of train-control group from all train and test samples
     - adjust_seasonality - boolean for subtracting the best fit polynomial to reduce the effects of the circadian cycle
 
     Returns
@@ -290,7 +289,6 @@ def preprocess_train_test_dataframes(
         scale_range = settings['scale_range'] if 'scale_range' in key else scale_range
         use_standard = settings['use_standard'] if 'use_standard' in key else use_standard
         use_gaussian = settings['use_gaussian'] if 'use_gaussian' in key else use_gaussian
-        subtract_mean = settings['subtract_mean'] if 'subtract_mean' in key else subtract_mean
         adjust_seasonality = settings['adjust_seasonality'] if 'adjust_seasonality' in key else adjust_seasonality
 
     # apply log function to all values
@@ -332,7 +330,7 @@ def preprocess_train_test_dataframes(
     if adjust_seasonality:
         time_index = [ x for x in range(1440)]
         train_means = X_train.apply(data_mean_med_std, axis=0).loc['mean']
-        degree = 20
+        degree = 5
         coef = np.polyfit(time_index, train_means, degree)
 
         curve = []
@@ -345,14 +343,6 @@ def preprocess_train_test_dataframes(
         X_train = X_train.apply(subtract_corresponding_minute, axis=1, args=(curve,))
         if X_test is not None:
             X_test = X_test.apply(subtract_corresponding_minute, axis=1, args=(curve,))
-
-    # subtract mean of training control samples from all samples
-    if subtract_mean:
-        train_control_indices = [x for x in X_train.index if int(x[0]) == 0]
-        train_control_mean = X_train.loc[train_control_indices].values.mean()
-        X_train = X_train.map(lambda x : x - train_control_mean)
-        if X_test is not None:
-            X_test = X_test.map(lambda x : x - train_control_mean)
 
     return (X_train, X_test)
 
@@ -387,7 +377,7 @@ def _extract_stats_from_window(data: pd.Series, include_quarter_diff = False, si
 
     # loading descriptive statistics
     labels.extend(['mean', 'median', 'std',  'max', 'min'])
-    stats.extend([data_np.mean(), data_np[len(data_np)//2], data_np.std(), data_np.max(), data_np.min()])
+    stats.extend([data_np.mean(), np.sort(data_np)[len(data_np)//2], data_np.std(), data_np.max(), data_np.min()])
 
     if not simple_stats:
         # calculating half window statistics

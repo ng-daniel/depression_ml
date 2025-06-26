@@ -1,12 +1,13 @@
+import os
 import pandas as pd
 import random
+import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 from core.data import preprocess_train_test_dataframes
-from core.util import data_mean_med_std, get_time_index
+from core.util import data_mean_med_std
 
-data = pd.read_csv("data/processed_dataframes/data_raw.csv", index_col=0)
-data_control = data[data['label'] == 0].copy()
-data_condition = data[data['label'] == 1].copy()
+SEED = random.randint(0,32768)
+DIR = "graphics"
 
 def get_time_index():
     '''
@@ -18,80 +19,145 @@ def get_time_index():
     time_index += ['12']
     return time_index
 
-def data_mean_trend_plot(data_control:pd.DataFrame = None, data_condition:pd.DataFrame = None, stat:str = None, title=None):
-    fig, ax = plt.subplots()
+def data_mean_trend_plot(data_control:pd.DataFrame = None, data_condition:pd.DataFrame = None, stat:str = None, title=None, ax=None, ylabel:str=None):
+    
+    fig=None
+    if ax is None:
+        fig, ax = plt.subplots()
+
     time_index = get_time_index()    
     if data_control is not None:
-        data_control = data_control.drop(labels=['label'], axis=1)
         data_control_trend = data_control.apply(data_mean_med_std, axis=0).transpose()
-        markers, caps, bars = plt.errorbar(
+        _, caps, bars = ax.errorbar(
             x=data_control_trend.index,
             y=data_control_trend[stat],
             yerr=data_control_trend['std'],
-            label='Control', color='blue',
+            label='non-depressed', color='blue',
             errorevery=7, capsize=0
         )
         [bar.set_alpha(0.15) for bar in bars]
         [cap.set_alpha(0.15) for cap in caps]
     
     if data_condition is not None:
-        data_condition = data_condition.drop(labels=['label'], axis=1)
         data_condition_trend = data_condition.apply(data_mean_med_std, axis=0).transpose()
-        markers, caps, bars = plt.errorbar(
+        _, caps, bars = ax.errorbar(
             x=data_condition_trend.index,
             y=data_condition_trend[stat],
             yerr=data_condition_trend['std'],
-            label='Condition', color='red',
+            label='depressed', color='red',
             errorevery=7, capsize=0
         )
         [bar.set_alpha(0.15) for bar in bars]
         [cap.set_alpha(0.15) for cap in caps]
 
     ax.set_xticks(ticks=range(0,1441,120), labels=time_index)
-    plt.xlabel('Time(Hour of Day)')
-    plt.ylabel('Number of Recorded Movements')
-    plt.title(title)
-    plt.legend()
-    plt.show()
+    ax.set_xlabel('Time(Hour of Day)')
+    ax.set_ylabel(ylabel)
+    ax.set_title(title)
+    ax.legend()
 
-def plot_random_samples(data_control:pd.DataFrame, data_condition:pd.DataFrame, n_random:int):    
+    return (fig, ax)
+
+def plot_random_samples(data_control:pd.DataFrame, data_condition:pd.DataFrame, n_random:int, ax=None, ylabel:str=None):    
+    random.seed(SEED)
     control_index = random.sample(range(len(data_control.index)), n_random)
     condition_index = random.sample(range(len(data_condition.index)), n_random)
 
     control_selected = data_control.iloc[control_index].copy()
     condition_selected = data_condition.iloc[condition_index].copy()
 
-    fig, ax = plt.subplots()
+    fig=None
+    if ax is None:
+        fig, ax = plt.subplots()
+
     for i in range(n_random):
-        plt.plot(control_selected.iloc[i], label='control', color='blue', alpha=0.2)
+        ax.scatter(range(0,1440), control_selected.iloc[i], label='non-depressed', color='blue', alpha=0.2, s=1.5)
     for i in range(n_random):
-        plt.plot(condition_selected.iloc[i], label='condition', color='red', alpha=0.2)
+        ax.scatter(range(0,1440), condition_selected.iloc[i], label='depressed', color='red', alpha=0.2, s=1.5)
     
-    time_index = get_time_index()
+    time_index = get_time_index()    
     ax.set_xticks(ticks=range(0,1441,120), labels=time_index)
-    plt.xlabel('Time(Hour of Day)')
-    plt.ylabel('Number of Recorded Movements')
-    plt.title('I CANT TAKE IT ANYMORE!!!')
-    plt.show()
+    ax.set_xlabel('Time(Hour of Day)')
+    ax.set_ylabel(ylabel)
+    ax.set_title(f' Activity Plot of {n_random*2} Samples')
+
+    red_patch = mpatches.Patch(color='red', label='non-depressed')
+    blue_patch = mpatches.Patch(color='blue', label='depressed')
+    ax.legend(handles=[red_patch, blue_patch])
+
+    return (fig, ax)
+
+data = pd.read_csv("data/processed_dataframes/data_raw.csv", index_col=0)
+
+data_control = data[data['label'] == 0].copy().drop(labels=['label'], axis=1)
+data_condition = data[data['label'] == 1].copy().drop(labels=['label'], axis=1)
+
+NUM_RANDOM = 5
+fig, ((ax1, ax2), (ax3, ax4), (ax5, ax6)) = plt.subplots(3, 2, figsize=(8,12))
+fig.tight_layout(pad=3)
 data_mean_trend_plot(data_control=data_control, 
                      data_condition=data_condition, 
                      stat='mean',
-                     title='Mean and Std. Dev Across All Raw Samples')
+                     title='No Preprocessing',
+                     ax=ax1,
+                     ylabel='# of Recorded Movements')
+plot_random_samples(data_control, 
+                    data_condition, 
+                    n_random=NUM_RANDOM, 
+                    ax=ax2,
+                    ylabel='# of Recorded Movements')
 
+preprocessing_settings = {
+    'resample' : False,
+    'log_base' : None,
+    'scale_range' : (0,1),
+    'use_standard' : None,
+}
 (processed_data, _) = preprocess_train_test_dataframes(
     X_train=data.drop(labels=['label'], axis=1),
-    log_base=None,
-    scale_range=None,
-    use_gaussian=None,
-    use_standard=True,
-    subtract_mean=False,
-    adjust_seasonality=False
+    settings=preprocessing_settings
 )
 processed_data['label'] = data['label']
-data_control = processed_data[processed_data['label'] == 0].copy()
-data_condition = processed_data[processed_data['label'] == 1].copy()
-plot_random_samples(data_control.drop(labels=['label'], axis=1), data_condition.drop(labels=['label'], axis=1), 10)
+data_control = processed_data[processed_data['label'] == 0].copy().drop(labels=['label'], axis=1)
+data_condition = processed_data[processed_data['label'] == 1].copy().drop(labels=['label'], axis=1)
 data_mean_trend_plot(data_control=data_control, 
                      data_condition=data_condition, 
                      stat='mean',
-                     title='Mean and Std. Dev Across All Preprocessed Samples')
+                     title='Scaled Data',
+                     ax=ax3,
+                     ylabel='Value')
+plot_random_samples(data_control, 
+                    data_condition, 
+                    n_random=NUM_RANDOM, 
+                    ax=ax4,
+                    ylabel='Value')
+
+preprocessing_settings = {
+    'resample' : True,
+    'log_base' : None,
+    'scale_range' : (0,1),
+    'use_standard' : True,
+    'use_gaussian' : 30,
+    'adjust_seasonality' : True,
+}
+(processed_data, _) = preprocess_train_test_dataframes(
+    X_train=data.drop(labels=['label'], axis=1),
+    settings=preprocessing_settings
+)
+processed_data['label'] = data['label']
+data_control = processed_data[processed_data['label'] == 0].copy().drop(labels=['label'], axis=1)
+data_condition = processed_data[processed_data['label'] == 1].copy().drop(labels=['label'], axis=1)
+data_mean_trend_plot(data_control=data_control, 
+                     data_condition=data_condition, 
+                     stat='mean',
+                     title='De-Noised Adjusted Data',
+                     ax=ax5,
+                     ylabel='Value')
+plot_random_samples(data_control, 
+                    data_condition, 
+                    n_random=NUM_RANDOM, 
+                    ax=ax6,
+                    ylabel='Value')
+
+fig.savefig(os.path.join(DIR, "preprocessing.png"))
+plt.show()

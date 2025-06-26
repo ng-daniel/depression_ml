@@ -4,7 +4,7 @@ import torch
 from torch.utils.data import DataLoader
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import precision_score, recall_score, f1_score, precision_recall_fscore_support
+from sklearn.metrics import precision_score, recall_score, f1_score, precision_recall_fscore_support, matthews_corrcoef
 
 LABELS = ['model_name', 'note', 'loss', 'acc', 'prec0', 'prec1', 'rec0', 'rec1', 'f1sc0', 'f1sc1', 'sup0', 'sup1']
 
@@ -28,6 +28,7 @@ def eval_model(model: torch.nn, dataloader: DataLoader, criterion: torch.nn, dev
     test_recall = [0 for _ in range(2)]
     test_fscore = [0 for _ in range(2)]
     test_support = [0 for _ in range(2)]
+    test_mcc = 0
 
     model_name = type(model).__name__
     
@@ -58,6 +59,8 @@ def eval_model(model: torch.nn, dataloader: DataLoader, criterion: torch.nn, dev
             test_support[0] += support[0] if len(support) > 0  else 0
             test_support[1] += support[1] if len(support) > 1  else 0
 
+            test_mcc += matthews_corrcoef(y.cpu(), preds.cpu())
+
     # calculate average metrics
     test_loss /= len(dataloader)
     test_acc /= len(dataloader)
@@ -67,10 +70,11 @@ def eval_model(model: torch.nn, dataloader: DataLoader, criterion: torch.nn, dev
     test_recall[1] /= len(dataloader)
     test_fscore[0] /= len(dataloader)
     test_fscore[1] /= len(dataloader)
+    test_mcc /= len(dataloader)
 
-    LABELS = ['model_name', 'note', 'loss', 'acc', 'prec0', 'prec1', 'rec0', 'rec1', 'f1sc0', 'f1sc1', 'sup0', 'sup1']
+    LABELS = ['model_name', 'note', 'loss', 'acc', 'prec0', 'prec1', 'rec0', 'rec1', 'f1sc0', 'f1sc1', 'sup0', 'sup1', 'mcc']
     results = pd.Series([model_name, note, test_loss, test_acc, test_precision[0], test_precision[1], test_recall[0], test_recall[1],
-                        test_fscore[0], test_fscore[1], test_support[0], test_support[1]])
+                        test_fscore[0], test_fscore[1], test_support[0], test_support[1], test_mcc])
     results.index = LABELS
     return results
 
@@ -106,10 +110,11 @@ def eval_sklearn_model(model, X_test: pd.DataFrame, y_test: list, criterion: tor
                                                     y_true = torch.tensor(y_test),
                                                     y_pred = torch.tensor(y_pred),
                                                     zero_division=np.nan)
+    test_mcc = matthews_corrcoef(y_true=y_test, y_pred=y_pred)
     
-    LABELS = ['model_name', 'note', 'loss', 'acc', 'prec0', 'prec1', 'rec0', 'rec1', 'f1sc0', 'f1sc1', 'sup0', 'sup1']
+    LABELS = ['model_name', 'note', 'loss', 'acc', 'prec0', 'prec1', 'rec0', 'rec1', 'f1sc0', 'f1sc1', 'sup0', 'sup1', 'mcc']
     results = pd.Series([model_name, note, test_loss, test_acc, test_precision[0], test_precision[1], test_recall[0], test_recall[1],
-                        test_fscore[0], test_fscore[1], test_support[0], test_support[1]])
+                        test_fscore[0], test_fscore[1], test_support[0], test_support[1], test_mcc])
     results.index = LABELS
     return results
 
@@ -126,7 +131,7 @@ def append_weighted_average(metrics_df: pd.DataFrame):
     - the modified dataframe with the new weighted average row
     '''
     metrics_df = metrics_df.copy()
-    metric_names = list(metrics_df.columns[2:-2])
+    metric_names = list(metrics_df.columns[2:])
     SUP0 = 'sup0'
     SUP1 = 'sup1'
 
@@ -156,7 +161,7 @@ def append_weighted_average(metrics_df: pd.DataFrame):
     
     # create and append row to dataframe
 
-    LABELS = ['model_name', 'note', 'loss', 'acc', 'prec0', 'prec1', 'rec0', 'rec1', 'f1sc0', 'f1sc1']
+    LABELS = ['model_name', 'note', 'loss', 'acc', 'prec0', 'prec1', 'rec0', 'rec1', 'f1sc0', 'f1sc1', 'sup0', 'sup1', 'mcc']
     weighted_avgs = pd.Series(weighted_avg_metrics).to_frame().transpose()
     weighted_avgs.columns = LABELS
     metrics_df = pd.concat([metrics_df, weighted_avgs], axis=0, ignore_index=True)
@@ -183,7 +188,7 @@ def combine_several_weighted_averages(metric_dataframes: list):
 
     new_df_means = new_df.iloc[-1].copy()
     new_df_means['note'] = 'wt_avg'
-    for col in ['loss', 'acc', 'prec0', 'prec1', 'rec0', 'rec1', 'f1sc0', 'f1sc1']:
+    for col in ['loss', 'acc', 'prec0', 'prec1', 'rec0', 'rec1', 'f1sc0', 'f1sc1', 'sup0', 'sup1', 'mcc']:
         new_df_means.loc[col] = new_df[col].mean()
     new_df = pd.concat([new_df, pd.DataFrame(new_df_means).transpose()], axis=0)
     return new_df
@@ -206,6 +211,43 @@ def create_metrics_table(metric_dataframes: list):
     new_metrics['prec'] = (metrics.loc[:,'prec0'] + metrics.loc[:,'prec1']) / 2
     new_metrics['rec'] = (metrics.loc[:,'rec0'] + metrics.loc[:,'rec1']) / 2
     new_metrics['f1sc'] = (metrics.loc[:,'f1sc0'] + metrics.loc[:,'f1sc1']) / 2
-    new_metrics = new_metrics.reset_index(drop=True).sort_values('acc', ascending=False)
-    new_metrics = new_metrics.drop(labels=['loss'], axis=1)
+    new_metrics = new_metrics.reset_index(drop=True)
     return new_metrics
+
+def metric_class_averages(metric_df : pd.DataFrame):
+
+    # calculate class ratio
+    support_values = metric_df[['sup0', 'sup1']].copy()
+    support_ratio = (support_values['sup0'] / support_values['sup1']).item()
+
+    def remove_end_digit(x:str):
+        if len(x) == 0:
+            return x
+        if x[-1].isdigit():
+            return x[:-1]
+        return x
+
+    # separate 0 and 1 class rows
+    columns_0 = [c for c in metric_df.columns if c[-1] != '1']
+    metric_0 = metric_df[columns_0].copy()
+    metric_0.columns = [remove_end_digit(c) for c in metric_0.columns]
+    metric_0['note'] = 0
+    
+    columns_1 = [c for c in metric_df.columns if c[-1] != '0']
+    metric_1 = metric_df[columns_1].copy()
+    metric_1.columns = [remove_end_digit(c) for c in metric_1.columns]
+    metric_1['note'] = 1
+
+    metrics_new = pd.concat([metric_0, metric_1], axis=0)
+
+    def weighted_avg(x:pd.Series, ratio:float):
+        val = x.iloc[0]
+        if isinstance(val, (int, float)):
+            return (x.iloc[0] * ratio + x.iloc[1]) / (1 + ratio)
+        return val
+
+    # calculate weighted average
+    metric_avg = metrics_new.apply(weighted_avg, axis=0, args=(support_ratio,))
+    metrics_new = pd.concat([metrics_new, pd.DataFrame(metric_avg).transpose()], axis=0)
+    return metrics_new
+    
