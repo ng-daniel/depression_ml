@@ -47,7 +47,7 @@ preprocessing_settings = {
 feature_settings = {
     'use_feature' : True,
     'long_feature' : True,
-    'window_size' : 30,
+    'window_size' : 60,
     'quarter_diff' : False,
     'simple' : True
 }
