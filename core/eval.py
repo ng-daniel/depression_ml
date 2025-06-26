@@ -219,7 +219,6 @@ def metric_class_averages(metric_df : pd.DataFrame, weight_support = False):
     # calculate class ratio
     support_values = metric_df[['sup0', 'sup1']].copy()
     support_ratio = (support_values['sup0'] / support_values['sup1']).item()
-    print(support_ratio)
     if weight_support == False:
         support_ratio = 1
 
