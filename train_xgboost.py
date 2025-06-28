@@ -37,7 +37,7 @@ hyperparameter_grid = {
 use_grid_search = True
 
 preprocessing_settings = {
-    'resample' : False,
+    'resample' : True,
     'log_base' : None,
     'scale_range' : (0,1),
     'use_standard' : None,

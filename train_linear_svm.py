@@ -29,7 +29,7 @@ NUM_FOLDS = len(os.listdir(KFOLD_DIR))//2
 RESULTS_DIR = "results"
 
 preprocessing_settings = {
-    'resample' : False,
+    'resample' : True,
     'log_base' : None,
     'scale_range' : None,
     'use_standard' : True,

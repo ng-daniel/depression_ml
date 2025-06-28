@@ -18,7 +18,7 @@ class LSTM(nn.Module):
         self.lstm = nn.LSTM(in_shape, hidden_shape, lstm_layers, batch_first=True)
         self.fc = nn.Sequential(
             nn.BatchNorm1d(hidden_shape),
-            nn.Dropout(0,1),
+            nn.Dropout(0),
             nn.Linear(hidden_shape, out_shape)
         )
     def forward(self, x):
@@ -51,6 +51,8 @@ class ConvNN(nn.Module):
         self.conv_block = nn.Sequential(
             nn.Conv1d(in_shape, hidden_shape, kernel_size=3, padding = 1),
             nn.BatchNorm1d(hidden_shape),
+            nn.ReLU(),
+            nn.Conv1d(hidden_shape, hidden_shape, kernel_size=3, padding = 1),
             nn.ReLU(),
             nn.Conv1d(hidden_shape, hidden_shape, kernel_size=3, padding = 1),
             nn.ReLU(),

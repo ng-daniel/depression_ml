@@ -28,7 +28,7 @@ RESULTS_DIR = "results"
 LONG_FEATURE = False
 
 preprocessing_settings = {
-    'resample' : False,
+    'resample' : True,
     'log_base' : None,
     'scale_range' : None,
     'use_standard' : True,
