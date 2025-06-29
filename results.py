@@ -20,7 +20,7 @@ def plot_class_comparisons(results:pd.DataFrame, class_val, ax, title, cbarlabel
     ax.set_xticks(range(len(classes)), labels=classes, rotation=20, ha="right", rotation_mode="anchor")
     ax.set_yticks(range(len(metrics)), labels=metrics)
 
-    threshold = im.norm(values.max())/1.6
+    threshold = im.norm(values[:,:-1].max())/1.6
     textcolors = ("white", "black")
     for i in range(len(metrics)):
         for j in range(len(classes)):
