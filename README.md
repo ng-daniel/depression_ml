@@ -130,7 +130,7 @@ Brief show and tell synopsis of the models I selected and why. Go to each model'
 
 | name                          | python class name      | description                                     |
 | ----------------------------- | ---------------------- | ----------------------------------------------- |
-| Zero Rule Baseline            | ZeroR                  | No thoughts, only predicts the majority class.  |
+| Zero Rule Baseline            | ZeroR                  | Only predicts the majority class.               |
 | Random Forest                 | RandomForestClassifier | Solid ensemble model.                           |
 | XGBoost                       | XGBClassifier          | Random Forest's gradient boosted little cousin. |
 | Linear Support Vector Machine | SVC                    | Best performing Depresjon baseline.             |
@@ -139,7 +139,7 @@ Brief show and tell synopsis of the models I selected and why. Go to each model'
 
 | name                        | python class name | description                                                          |
 | --------------------------- | ----------------- | -------------------------------------------------------------------- |
-| Multilayer Perceptron (MLP) | FeatureMLP        | Classic.                                                             |
+| Multilayer Perceptron (MLP) | FeatureMLP        | Basic neural network architecture.                                   |
 | 1D CNN                      | ConvNN            | Lightweight feature extraction.                                      |
 | LSTM                        | LSTM              | Type of RNN, great for time series data.                             |
 | CNN LSTM Hybrid             | ConvLSTM          | 1d CNN with more serious temporal shenanigans.                       |
