@@ -2,11 +2,6 @@
 
 This repo contains all the machine learning pipelines and code I wrote in Python for rapid experimentation of various machine learning models and preprocessing techniques. I learned so much through this project, and if you want the details and a couple figures, I've explained it all as best as I can.
 
-TODO:
-
-- Results Charts
-- Writing ReadME.md
-
 ### The Short Version
 
 This project is about relationship between physical movement patterns and depression, and trying to detect this with machine learning. The dataset, called Depresjon, contains motion data from 55 subjects-- some depressed, some non-depressed(Enrique et al). This time-series dataset was challenging to work with because it is small, imbalanced, and full of noise.
@@ -39,9 +34,10 @@ depression
 ├───figures                 # figures, graphs, charts and stuff
 │───results                 # .csv files of experiment results
 │
-│─analysis.py           # visualizing samples and preprocessing
+│─data_analysis.py      # visualizing samples and preprocessing
 │─load_data.py          # aggregating samples and creating folds
 │─results.py            # formatting and visualizing results
+│─scores_analysis.py    # visualizing subject demographics
 │
 │─train_A.py            # training modules for respective models
 ...
@@ -68,7 +64,7 @@ depression
    1. copy the format of an existing training module, except with your Pytorch/Sci-kit Learn model
    2. create a new training loop in the `training_loops.py`
 
-## You're Telling Me A Pipeline Preprocessed This Data?
+## Data Details
 
 The Depresjon Dataset consists of 55 subjects, with an average of 12-13 days of data each. The data is recorded in minute intervals. Here's a `.csv` snippet of subject `control_1`:
 
@@ -81,6 +77,14 @@ The Depresjon Dataset consists of 55 subjects, with an average of 12-13 days of 
 | 2003-03-18 15:04:00 | 2003-03-18 | 293      |
 
 During data collection, subjects wore a motion traching watch that sampled at 32 hz for movements above 0.05 g, or ~0.5 m/s(Enrique et al). The `activity` column records the number of recorded movements for the duration of that minute.
+
+The dataset was nice enough to provide some demographic information, but only for the condition/depressed class. Regardless, I've whipped up some quick visuals for them, as they can still tell us about the population we're working with.
+
+![2 figures depicting condition subject demographics](./figures/scores_demographics.png)
+
+It seems like the age range is pretty wide, with most subjects in their 30s and 40s. There's a healthy mix of married and unmarried individuals, but most subjects are not currently employed or in school.
+
+## You're Telling Me A Pipeline Preprocessed This Data?
 
 ### Challenges with the dataset:
 
@@ -98,7 +102,7 @@ During data collection, subjects wore a motion traching watch that sampled at 32
 
 4. **Seasonal Adjustments**. Looking at the data reveals a clear circadian cycle, as one would expect. Removing this large pattern might reveals subtle differences in the classes that otherwise would have gone unnoticed, improving model performance. I achieve this by fitting a polynomial to the training data, then subtracting it from all samples.
 
-<sup>\*Not all preprocessing techniques were used for each model, as the optimal processing setup is different for each one. The most notable difference was SMOTE being worse for simpler models like Random Forest and SVMs, but beneficial for neural networks. This may be due to SMOTE's tradeoff of potentially introducing more noise in exchange for more data-- which the neural nets can handle, but the others cannot.</sup>
+<sup>\*Not all preprocessing techniques were used for each model, as the optimal processing setup is different for each one.</sup>
 
 Below are some figures visualizing a possible preprocessing result. On the left, the solid and transparent colors represent the mean and standard deviation, respectively, of all samples by minute. The right shows individual data points from 10 samples, 5 per class.
 
@@ -115,6 +119,8 @@ Since I was working on a similar project at the time, I got some ideas for poten
 1. **Simple Statistical Features**. Standard statistics like means, medians, maximums and minimums to get a big picture view of the data.
 
 2. **Sliding Window Approach**. Rather than just calculate a few features for the whole sample, by sliding that window across the data and taking snapshots along the way, we can extract way more features while also taking into account the flow of time. and it works pretty well for some models.
+
+<sup>\*Similar to the preprocessing techniques, different models had different extracted features, ie. different window sizes or types of features used.</sup>
 
 ## Model Selection, Training, and Evaluation
 
@@ -135,7 +141,7 @@ Brief show and tell synopsis of the models I selected and why. Go to each model'
 | --------------------------- | ----------------- | -------------------------------------------------------------------- |
 | Multilayer Perceptron (MLP) | FeatureMLP        | Classic.                                                             |
 | 1D CNN                      | ConvNN            | Lightweight feature extraction.                                      |
-| LSTM                        | LSTM              | Great for time series data.                                          |
+| LSTM                        | LSTM              | Type of RNN, great for time series data.                             |
 | CNN LSTM Hybrid             | ConvLSTM          | 1d CNN with more serious temporal shenanigans.                       |
 | Feature LSTM                | LSTM_Feature      | LSTM model with sliding window features instead of pure motion data. |
 
@@ -143,15 +149,15 @@ Brief show and tell synopsis of the models I selected and why. Go to each model'
 
 Though I used SMOTE earlier to address the class imbalance in the training set, the evaluation dataset is still imbalanced. Therefore, it is still important that we select metrics that are resistant to imbalanced classes(thanks Depresjon for the metric suggestions).
 
-| name      | abreviaton | range  | description                                                                  |
-| --------- | ---------- | ------ | ---------------------------------------------------------------------------- |
-| Accuracy  | acc        | [0,1]  | % of correct predictions.                                                    |
-| Precision | prec       | [0,1]  | % of correct positive predictions out of all positive predictions.           |
-| Recall    | rec        | [0,1]  | % of actual positives identified.                                            |
-| F1-Score  | f1sc       | [0,1]  | Harmonic mean of precision and recall.                                       |
-| MCC       | mcc        | [-1,1] | Matthews Correlation Coefficient, a balanced measure for imbalanced classes. |
+| name      | abreviaton | range  | description                                                                           |
+| --------- | ---------- | ------ | ------------------------------------------------------------------------------------- |
+| Accuracy  | acc        | [0,1]  | % of correct predictions.                                                             |
+| Precision | prec       | [0,1]  | % of correct positive predictions out of all positive predictions.                    |
+| Recall    | rec        | [0,1]  | % of actual positives identified.                                                     |
+| F1-Score  | f1sc       | [0,1]  | Harmonic mean of precision and recall.                                                |
+| MCC       | mcc        | [-1,1] | Matthews Correlation Coefficient, takes into account T/F positives and T/F negatives. |
 
-With the main goal being identifying depressed individuals from motion data, the ideal metrics would **maximize recall on the depressed class without over-sacrificing other metrics** like F1-Score or the MCC.
+With the main goal being identifying depressed individuals from motion data, the ideal metrics would **maximize recall on the depressed class without over-reducing other metrics** like F1-Score or the MCC.
 
 <sup>\*Even with 5 fold cross validation, all neural networks saw significant instability in evaluation metrics between identical experiments due to their nondeterministic nature. To fix this, I ran an additional 29 trials for each neural network and averaged the results to better represent their true performance.</sup>
 
@@ -161,7 +167,25 @@ Final metrics of 5-Fold cross validation visualized with heatmaps. **Best metric
 
 ![4 labeled heatmaps depicting model results](./figures/heatmap_results.png)
 
-Overall, the best performing classifier with unweighted macro averages is the 1d CNN, with a solid MCC score of 0.459 and a recall of 0.726. When weighting the averages by the number of samples in each class, the linear SVM is the new champion
+<sup>\*The results discussion will reference the original Depresjon paper results quite a bit, so use the links below to see the original paper and their results.</sup>
+
+Overall, the best performing classifier with unweighted macro averages is the 1d CNN, with a MCC of **0.463** and an accuracy of **73.3%**. When weighting the averages by the number of samples in each class, the linear SVM ends up on top instead, improving in all metrics compared to the previous with **0.744** precision and **0.734** recall.
+
+### Metrics Analysis
+
+Models generally struggled predicting the depressed class more than the non-depressed class, which the Depresjon paper mentioned regarding their baseline experiments. The SMOTE technique proved to be successful in addressing this issue. Though SMOTE caused a slight drop in non-depressed precision, there were larger improvements in depressed precision, sometimes by over 10%. As a result, compared to the Depresjon paper's results, models using SMOTE achieved a much more balanced result across both classes.
+
+An interesting phenomenon that I noticed between the two classes is the dichotomy between precision and recall. Models with low recall typically had high precision, and vice versa. Additionally, models with higher precision for the control class had higher recall in the condition class. This makes sense, as precision and recall are naturally against eachother. All else being equal, the more you focus on capturing an entire population(recall), the less likely you are to have every prediction be correct(precision). Furthermore, capturing the majority of one class may lead to capturing less of the other.
+
+### Challenges
+
+These metrics indicate that my models and data preprocessing techniques are an improvement over the original results based on both overall performance and depressed class performance. However, it is also clear that these results aren't perfect. Due to the small dataset size, neural network based models like LSTMs weren't able to perform at their highest capacity, since they are known to scale significantly with data availability. Additionally, as visualized in the preprocessing section, the difference between the two classes - though evident - is not extreme. Perhaps there just isn't enough of a difference between the two classes to achieve better results.
+
+This makes sense, since there are many other factors that contribute to movement patterns than just depression. From the visualizations in the demographics section, we can see that the subject pool contains a diverse group of individuals, which all contribute to differences in daily movement patterns(for example, students may tend to stay up late more compared to the elderly). For future research, it may be worthwhile to collect data from a single demographic such as college students, trading the population scope for better predictions.
+
+In conclusion, despite the challenges presented by this dataset, by using various preprocessing techniques and model architectures, I was able to improve on the paper's baseline results in classifying depressive states from motion data, especially performance on the depressed class.
+
+Okay that's it byee!
 
 ## References That I Definitely Didn't Make Up
 
