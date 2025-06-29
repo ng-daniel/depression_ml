@@ -8,7 +8,7 @@ from core.eval import metric_class_averages
 
 def plot_class_comparisons(results:pd.DataFrame, class_val, ax, title, cbarlabel, colormap, minmax:tuple[int,int] = (0.4,0.85)):
     
-    results = results[(results['note']==class_val) & (results['model_name']!='ZeroR')]
+    results = results[(results['note']==class_val)]
     classes = list(results['model_name'])
     metrics = [col for col in results.columns if (col != 'model_name' and col != 'note')]
     values = np.array(results.loc[:,metrics]).transpose()
@@ -25,7 +25,7 @@ def plot_class_comparisons(results:pd.DataFrame, class_val, ax, title, cbarlabel
     for i in range(len(metrics)):
         for j in range(len(classes)):
             color=textcolors[int(im.norm(values[i, j]) > threshold)]
-            fontweight = 'bold' if values[i,j] == values[i,:].max() else None
+            fontweight = 'bold' if values[i,j] == values[i,:-1].max()else None
             text = ax.text(j, i, values[i, j], ha="center", va="center", color=color, fontweight=fontweight)
 
     ax.set_title(title)
@@ -55,8 +55,8 @@ final_results = final_results.map(lambda x : round(x,3) if isinstance(x,float) e
 final_results.to_csv(os.path.join(RESULTS_DIR, wt_sett['csv']))
 print(final_results)
 
-fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(12,8))
-fig.tight_layout(pad=5)
+fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(14,9))
+fig.tight_layout(pad=3)
 plot_class_comparisons(final_results, class_val=0, ax=ax1, title="Non-Depressed", cbarlabel="Metric Value", colormap=wt_sett['cmap'])
 plot_class_comparisons(final_results, class_val=1, ax=ax2, title="Depressed", cbarlabel="Metric Value", colormap=wt_sett['cmap'])
 plot_class_comparisons(final_results, class_val='macro_avg', ax=ax3, title="Macro Average", cbarlabel="Metric Value", colormap=wt_sett['cmap'])
