@@ -1,6 +1,6 @@
 # Machine Learning for Detecting Depression from Motion Data
 
-This repo contains all the machine learning pipelines and code I wrote in Python for rapid experimentation of various machine learning models and preprocessing techniques. I learned so much through this project, and if you want the details and a couple figures, I've explained it all as best as I can.
+This repo contains all the machine learning pipelines and code I wrote in Python for rapid experimentation of various machine learning models and preprocessing techniques. This README details my process for this project with explanations for certain techniques and figures of results and other interesting findings.
 
 ### The Short Version
 
@@ -163,7 +163,75 @@ With the main goal being identifying depressed individuals from motion data, the
 
 ## Results
 
-Final metrics of 5-Fold cross validation visualized with heatmaps. **Best metrics are in bold.**
+Final metrics of 5-Fold cross validation. The models in the tables and graphs are not ordered in any particular manner. **Best metrics are in bold.**
+
+---
+
+### _Non-Depressed Class_
+
+| model_name             | acc       | prec      | rec       | f1sc      | mcc       |
+| ---------------------- | --------- | --------- | --------- | --------- | --------- |
+| ConvNN                 | **0.733** | **0.795** | 0.713     | 0.747     | **0.463** |
+| ConvLSTM               | 0.719     | 0.786     | 0.721     | 0.737     | 0.433     |
+| SVC                    | 0.73      | 0.78      | 0.754     | **0.764** | 0.45      |
+| LSTM                   | 0.71      | 0.788     | 0.676     | 0.722     | 0.419     |
+| LSTM_Feature           | 0.723     | 0.766     | 0.755     | 0.751     | 0.435     |
+| FeatureMLP             | 0.718     | 0.767     | 0.749     | 0.747     | 0.421     |
+| RandomForestClassifier | 0.705     | 0.734     | **0.776** | 0.752     | 0.388     |
+| XGBClassifier          | 0.708     | 0.743     | 0.761     | 0.749     | 0.402     |
+| ZeroR                  | 0.562     | 0.567     | 1.0       | 0.715     | 0.0       |
+
+---
+
+### _Depressed Class_
+
+| model_name             | acc       | prec      | rec       | f1sc      | mcc       |
+| ---------------------- | --------- | --------- | --------- | --------- | --------- |
+| ConvNN                 | **0.733** | 0.669     | **0.751** | **0.699** | **0.463** |
+| ConvLSTM               | 0.719     | 0.655     | 0.711     | 0.671     | 0.433     |
+| SVC                    | 0.73      | **0.695** | 0.708     | 0.698     | 0.45      |
+| LSTM                   | 0.71      | 0.641     | 0.746     | 0.682     | 0.419     |
+| LSTM_Feature           | 0.723     | 0.654     | 0.674     | 0.66      | 0.435     |
+| FeatureMLP             | 0.718     | 0.661     | 0.662     | 0.656     | 0.421     |
+| RandomForestClassifier | 0.705     | 0.677     | 0.608     | 0.637     | 0.388     |
+| XGBClassifier          | 0.708     | 0.683     | 0.636     | 0.654     | 0.402     |
+| ZeroR                  | 0.562     | 0.0       | 0.0       | 0.0       | 0.0       |
+
+---
+
+### _Macro(Unweighted) Average_
+
+| model_name             | acc       | prec      | rec       | f1sc      | mcc       |
+| ---------------------- | --------- | --------- | --------- | --------- | --------- |
+| ConvNN                 | **0.733** | 0.732     | **0.732** | 0.723     | **0.463** |
+| ConvLSTM               | 0.719     | 0.72      | 0.716     | 0.704     | 0.433     |
+| SVC                    | 0.73      | **0.738** | 0.731     | **0.731** | 0.45      |
+| LSTM                   | 0.71      | 0.714     | 0.711     | 0.702     | 0.419     |
+| LSTM_Feature           | 0.723     | 0.71      | 0.715     | 0.706     | 0.435     |
+| FeatureMLP             | 0.718     | 0.714     | 0.706     | 0.701     | 0.421     |
+| RandomForestClassifier | 0.705     | 0.706     | 0.692     | 0.695     | 0.388     |
+| XGBClassifier          | 0.708     | 0.713     | 0.699     | 0.701     | 0.402     |
+| ZeroR                  | 0.562     | 0.284     | 0.5       | 0.358     | 0.0       |
+
+---
+
+### _Weighted Average_
+
+| model_name             | acc       | prec      | rec       | f1sc      | mcc       |
+| ---------------------- | --------- | --------- | --------- | --------- | --------- |
+| ConvNN                 | **0.733** | 0.741     | 0.73      | 0.727     | **0.463** |
+| ConvLSTM               | 0.719     | 0.729     | 0.717     | 0.709     | 0.433     |
+| SVC                    | 0.73      | **0.744** | **0.734** | **0.735** | 0.45      |
+| LSTM                   | 0.71      | 0.724     | 0.706     | 0.705     | 0.419     |
+| LSTM_Feature           | 0.723     | 0.718     | 0.721     | 0.712     | 0.435     |
+| FeatureMLP             | 0.718     | 0.721     | 0.712     | 0.708     | 0.421     |
+| RandomForestClassifier | 0.705     | 0.71      | 0.704     | 0.703     | 0.388     |
+| XGBClassifier          | 0.708     | 0.718     | 0.707     | 0.708     | 0.402     |
+| ZeroR                  | 0.562     | 0.324     | 0.571     | 0.408     | 0.0       |
+
+---
+
+These metrics are better visualized with heatmaps. **Best metrics are in bold.**
 
 ![4 labeled heatmaps depicting model results](./figures/heatmap_results.png)
 

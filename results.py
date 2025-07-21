@@ -1,6 +1,5 @@
 import os
 import pandas as pd
-import random
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -30,6 +29,14 @@ def plot_class_comparisons(results:pd.DataFrame, class_val, ax, title, cbarlabel
 
     ax.set_title(title)
 
+def reorder_final_results_table(results: pd.DataFrame):
+    zero_class = final_results[final_results['note'] == 0].copy()
+    one_class = final_results[final_results['note'] == 1].copy()
+    macro_class = final_results[final_results['note'] == 'macro_avg'].copy()
+    wt_class = final_results[final_results['note'] == 'wt_avg'].copy()
+    return pd.concat([zero_class, one_class, macro_class, wt_class]).reset_index(drop=True)
+
+
 RESULTS_DIR = 'results'
 FIG_DIR = "figures"
 
@@ -52,6 +59,7 @@ for filename in filenames:
 final_results = pd.concat(results).reset_index(drop=True)
 final_results = final_results.drop(labels=['sup', 'loss'], axis=1)
 final_results = final_results.map(lambda x : round(x,3) if isinstance(x,float) else x)
+final_results = reorder_final_results_table(final_results)
 final_results.to_csv(os.path.join(RESULTS_DIR, wt_sett['csv']))
 print(final_results)
 
